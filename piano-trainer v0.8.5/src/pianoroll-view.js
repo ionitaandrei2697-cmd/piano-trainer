@@ -405,9 +405,17 @@
       // the note (the edge that reaches the keys first). The old 10 px digit
       // printed straight onto the note was hard to read at a glance, on gold
       // and blue alike; the disc reads the same on both. Sized to the lane.
-      const fr = Math.max(6, Math.min(10, w / 2 - 1));   // disc radius
-      if (finger && h >= 2 * fr + 4 && w >= 12) {
-        const cx = x + w / 2, cy = y + h - fr - 3;
+      // EVERY note gets its number. The disc used to be drawn only on notes
+      // tall and wide enough for a full-size one, so sixteenths at the default
+      // fall speed (16 px) and the narrow black-key lanes of a smaller window
+      // showed none — 44 of 1,534 notes of a pop arrangement at 1440 px, 231 at
+      // 1024 px. A short note now gets a smaller disc centred on it (it may
+      // overhang the note a little), a narrow lane one that overhangs the lane.
+      const full = Math.max(6, Math.min(10, w / 2 - 1));
+      const fits = h >= 2 * full + 4;
+      const fr = fits ? full : Math.max(5.5, Math.min(full, (h + 2) / 2));
+      if (finger && w >= 6) {
+        const cx = x + w / 2, cy = fits ? y + h - fr - 3 : y + h / 2;
         c.save();
         c.beginPath(); c.arc(cx, cy, fr, 0, Math.PI * 2);
         c.fillStyle = "rgba(10,14,22,0.86)"; c.fill();
@@ -415,7 +423,7 @@
         // so an edit saved weeks ago can't pass for what the app suggested
         if (pinned) { c.lineWidth = 1.6; c.strokeStyle = T.ivory; c.stroke(); }
         c.fillStyle = T.ivory;
-        c.font = '700 ' + Math.round(fr * 1.45) + 'px "IBM Plex Sans", system-ui, sans-serif';
+        c.font = '700 ' + Math.max(8, Math.round(fr * 1.45)) + 'px "IBM Plex Sans", system-ui, sans-serif';
         c.textAlign = "center"; c.textBaseline = "middle";
         c.fillText(String(finger), cx, cy + 0.5);
         c.restore();
@@ -447,7 +455,7 @@
       if (wide && h >= 12 && w >= 8) {
         // above the finger disc (which sits at the bottom of the note), so the
         // two never overlap in a narrow lane
-        const discTop = finger && h >= 2 * fr + 4 && w >= 12 ? y + h - 2 * fr - 6 : y + h - 3;
+        const discTop = finger && fits ? y + h - 2 * fr - 6 : y + h - 3;
         const lx = x + w / 2 - 1, y0 = discTop, y1 = Math.max(y + 3, y0 - 22);
         c.save();
         c.beginPath();

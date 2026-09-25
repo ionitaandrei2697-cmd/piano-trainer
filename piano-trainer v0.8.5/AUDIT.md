@@ -287,3 +287,34 @@ exact minimum of hand moves on all 13 melodies). `tests/fingervariants.js`.
   `scorecheck.js` now counts the faded top of the next system as part of the
   first at 1280x800 — the grand staff itself is fully visible (screenshot
   checked).
+
+---
+
+## Round 4 — reported on a real piece
+
+A two-track pop arrangement (1,534 notes, 120 BPM), converted to sheet music.
+Four reports, each reproduced on the file before changing anything:
+
+| # | Sev | Finding | How it was reproduced |
+|---|-----|---------|-----------------------|
+| 37 | S3 | **One key, different fingers in one line.** Bar 29, E E E-E E E-E A E (eighths with pairs of sixteenths): 3 3 3 **2** 3 3 **2** 5 2. The round-3 rule for fast repeated notes judged each repetition by its own interval, and 0.125 s (sixteenths at 120 BPM) is fast, 0.25 s is not — so only the pairs alternated. | Fingers dumped for bars 29-32 of the file: 9 repeated E's changed finger (29 in the piece), each one struck 0.125 s after the note before it — the notes after a sixteenth. |
+| 38 | S2 | **White page after Convert to sheet music** until reload. Introduced in round 3: the import ladder showed the score panel only after the engine had drawn it, and a MIDI file hides that panel, so the score was laid out 0 px wide. The resize observer ignored 0 px, so showing the panel again at the same width did not count as a change. | SVG width after Convert: **0 px** (height 19,197 px). |
+| 39 | S3 | **Missing finger numbers.** Every note had a finger; the disc was drawn only when a full-size one fitted the note (height >= 24 px, lane >= 12 px). | 44 of 1,534 notes at 1440 px, 231 at 1024 px (201 of them on black-key lanes). |
+| 40 | S4 | The two hand-move marks (two bars, an arc) had no legend on screen, only a tooltip in Settings. | Reported. |
+
+**Fixes.** (37) A repeated key changes finger only inside a *run* — at least four
+strokes, each within 0.14 s — and then in the pianist's cycle (towards the
+thumb, starting again on 3 or 4: 4-3-2-1, 3-2-1-3-2-1); anything shorter keeps
+one finger. Bar 29 is now 2 2 2 2 2 2 2 5 2; four fast repeats then F G give
+4-3-2-1 2-3. The thresholds are **rules of thumb** (a finger re-strikes
+comfortably for a few strokes at 6-7 a second; it is a sustained run past that
+which wants the fingers to take turns). (38) The panel is shown before the
+engine draws; a score loaded into a hidden panel is drawn when the panel shows
+(`sheet.pendingRender`). (39) Short notes get a smaller disc (radius >= 5.5 px),
+narrow lanes a disc that overhangs the lane. (40) A legend in the corner of the
+falling notes, listing only the marks the piece has.
+
+Verified by `tests/round10.js` (7 checks; the previous commit fails 4 of them)
+and `tests/fingervariants.js` (19; bar 29 and the 4-3-2-1 run are in it). The
+average-hand results are unchanged: 96.1% / 100% method-book agreement, the
+exact minimum of hand moves on all 13 melodies.

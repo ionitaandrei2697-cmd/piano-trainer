@@ -633,11 +633,13 @@ One is suggested for your hand (relaxed up to about an octave, stay-in-position
 from a tenth — a rule of thumb); the one you pick is remembered per piece, and
 your own finger edits stay pinned in every style.
 
-**Fast repeated notes change finger** — 3-2-1, towards the thumb — when they
-come faster than about 8 a second, and keep one finger slower than about 5 a
-second (a rule of thumb for where one finger stops being able to keep up; in
-between the choice fades from one to the other). A finger change on the same
-key is technique, not a move of the hand, so it is never counted as a shift.
+**Fast repeated notes change finger** — 4-3-2-1 or 3-2-1, towards the thumb,
+starting again on 3 or 4 — in a **run**: four or more strokes on one key, each
+within 0.14 s of the last (about 7 a second or faster). A burst of two or three
+quick notes inside a slower line keeps one finger: that is a wrist's job, and a
+finger changing on every other note of a line reads as a mistake. Both numbers
+are rules of thumb. A finger change on the same key is technique, not a move of
+the hand, so it is never counted as a shift.
 
 ## Practice, by the research
 
@@ -762,6 +764,32 @@ and the keyboard shortcuts reach everything.
 ---
 
 ## What changed in this revision
+
+### Reported on a real piece: one key, one finger; a page that stayed white
+
+Tested on a pop arrangement (two tracks, 1,534 notes, 120 BPM):
+
+- **The same key got different fingers in one line** — E E E-E E E-E A E,
+  eighths with pairs of sixteenths, came out 3 3 3 2 3 3 2. The rule for fast
+  repeated notes judged each repetition on its own speed, so only the pairs of
+  sixteenths changed finger. It now looks at **runs**: four or more strokes on
+  one key, each within 0.14 s of the last, change finger in the pianist's cycle
+  (4-3-2-1, 3-2-1, starting again on 3 or 4); a burst of two or three quick
+  notes inside a slower line keeps one finger. That passage is now 2 2 2 2 2 2 2
+  5 2. (Both thresholds are rules of thumb; see *Fingering styles*.)
+- **After Convert to sheet music the page stayed white** until a reload: the
+  score was drawn while its panel was still hidden (the MIDI view hides it), so
+  it was laid out 0 px wide. The page is shown first now, and a score opened
+  while the Score panel is off is drawn when the panel comes back.
+- **Some falling notes had no finger number**: the disc was drawn only on notes
+  tall and wide enough for a full-size one — 44 of the 1,534 notes at 1440 px,
+  231 at 1024 px (the black-key lanes). Short notes get a smaller disc now, and
+  every practised note shows its finger.
+- **The marks under the falling notes have a legend** in the corner of the
+  panel, for the marks the piece has: two bars **‖** — the whole hand lifts
+  and lands in a new position (a jump); an arc **◡** — the thumb passes under,
+  or a finger crosses over the thumb, and the hand glides on without lifting;
+  a wavy line — a chord wider than your hand.
 
 ### Scores that wouldn't open, fingering for your hand, a calmer interface
 

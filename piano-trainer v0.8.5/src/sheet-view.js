@@ -95,12 +95,24 @@
       } catch (e) { /* older builds: keep the defaults */ }
       this.osmd.Zoom = this.autoFit ? 1 : (this.osmd.Zoom || 1);
       this._loaded = true;
-      if (this.autoFit) this.fitToPanel(); else this.osmd.render();
+      this._cursorIndex = 0;
+      // A panel that isn't on screen has no width to lay the score out to;
+      // drawing it there produced a 0-px-wide page that stayed blank. The
+      // score is drawn when the panel shows (reflow()).
+      if (!this.visible) { this.pendingRender = true; return; }
+      this._draw();
       this.osmd.cursor.show();
       this.osmd.cursor.reset();
-      this._cursorIndex = 0;
       this._applyCursorVisibility();
       this._rebuildNoteMap();
+    }
+
+    /** Is there a panel on screen to draw into? */
+    get visible() { return !!(this.container && this.container.clientWidth > 0); }
+
+    _draw() {
+      if (this.autoFit) this.fitToPanel(); else this.osmd.render();
+      this.pendingRender = false;
     }
 
     /** Attach the onset table from the parsed song (call after parser ran). */
@@ -110,7 +122,7 @@
 
     /** Move the cursor to match a playhead position (seconds). */
     syncTo(posSec, song) {
-      if (!this._loaded || !this.osmd || !song.secondsToWhole) return;
+      if (!this._loaded || this.pendingRender || !this.osmd || !song.secondsToWhole) return;
       const cursor = this.osmd.cursor;
       const it = cursor.Iterator;
       if (!it || !it.currentTimeStamp) return;
@@ -153,7 +165,7 @@
     }
 
     reset() {
-      if (!this._loaded || !this.osmd) return;
+      if (!this._loaded || this.pendingRender || !this.osmd) return;
       this.osmd.cursor.reset();
       this._cursorIndex = 0;
       this.osmd.cursor.update();
@@ -164,6 +176,7 @@
         try { this.osmd.clear(); } catch (e) { /* ignore */ }
       }
       this._loaded = false;
+      this.pendingRender = false;
       this._cursorIndex = 0;
       this._onsets = null;
     }
@@ -176,10 +189,11 @@
      */
     reflow() {
       if (!this.loaded || !this.osmd) return;
+      if (!this.visible) { this.pendingRender = true; return; }
       try {
-        if (this.autoFit) this.fitToPanel(); else this.osmd.render();
+        this._draw();
         this._afterRender();
-      } catch (e) { /* a failed reflow must never break playback */ }
+      } catch (e) { console.warn("Score re-flow failed", e); /* never break playback */ }
     }
 
     /** Everything that must happen after OSMD rebuilds the SVG. */
@@ -325,7 +339,7 @@
 
     setAutoFit(on) {
       this.autoFit = !!on;
-      if (this.autoFit && this.loaded) { this.fitToPanel(); this._afterRender(); }
+      if (this.autoFit && this.loaded) this.reflow();
     }
 
     /** Manual zoom (turns auto-fit off at the app level). */
@@ -333,8 +347,7 @@
       if (!this.osmd) return;
       this.autoFit = false;
       this.osmd.Zoom = factor;
-      this.osmd.render();
-      if (this._loaded) this._afterRender();
+      if (this._loaded) this.reflow();
     }
 
     /** Show/hide the green cursor bar; tracking and auto-scroll keep working. */

@@ -112,7 +112,7 @@
       "hud","hudText","hudBar","hudBarWrap","fingerPad","fingerScope","scopeNote","scopePitch","scopePitchLabel","btnResetFingering","btnQuickListen","btnQuickLearn",
       "btnLearnPlay","btnLearnRepeat","btnClearControls","ctlPlayName","ctlRepeatName",
       "latency","latencyVal","btnCalibrate","calibNote","calibPanel","calibText","calibPad","dropZone",
-      "handReach","handCm","handNote","fingerStyles","setNav","toasts","btnStyles","pieceInfo",
+      "handReach","handCm","handNote","fingerStyles","setNav","toasts","btnStyles","pieceInfo","rollLegend",
     ].forEach((id) => { els[id] = $(id); });
   }
 
@@ -394,6 +394,12 @@
     const prep = SI.normalize(xml);
     // re-reading the open score (new part choices) keeps what the first read repaired
     let fixes = ((choice && choice.fixes) || []).concat(prep.fixes), engraved = true, text = prep.xml, firstErr = null;
+    // The page must be ON SCREEN before the engine draws it: it lays the score
+    // out to the panel's width, and a hidden panel (the one a MIDI file hides,
+    // e.g. before "Convert to sheet music") is 0 px wide — the score was drawn
+    // into nothing and the page stayed blank until the app was reloaded.
+    els.noSheet.classList.add("is-hidden");
+    els.sheetPanel.classList.toggle("is-hidden", !show.sheet);
     try {
       await sheet.loadXML(text);
     } catch (e1) {
@@ -631,6 +637,7 @@
     // fingering (the piece's own style, if it has one, arrives with its edits)
     fingerStrategy = null;
     PT.fingering.annotate(song, handSpec(), { strategy: currentStrategy() });
+    updateRollLegend();
 
     // views range from profile ∪ song — in PLAYED space, so the falling notes
     // land on exactly the keys the player presses even with transpose set
@@ -774,6 +781,7 @@
     if (!song) return 0;
     const before = song.notes.map((n) => n.finger);
     PT.fingering.annotate(song, handSpec(), { pins: currentPins(), strategy: currentStrategy() });
+    updateRollLegend();
     let changed = 0;
     song.notes.forEach((n, i) => { if (n.finger !== before[i]) changed++; });
     if (els.btnResetFingering) els.btnResetFingering.disabled = !Object.keys(fingerOverrides).length && !Object.keys(fingerRules).length;
@@ -1199,6 +1207,23 @@
     else { rafId = null; lastTickWall = 0; drawFrame(); }
   }
   function drawFrame() { syncViews(perceivedPos()); }
+
+  /** The legend of hand-move marks: shown for the marks this piece has, while they are shown. */
+  function updateRollLegend() {
+    const lg = els.rollLegend;
+    if (!lg) return;
+    const has = { jump: false, pass: false, wide: false };
+    if (song) for (const n of song.notes) {
+      if (n.handMove === "jump") has.jump = true; else if (n.handMove === "pass") has.pass = true;
+      if (n.wide) has.wide = true;
+    }
+    const movesOn = !!(els.toggleMoves && els.toggleMoves.checked);
+    for (const it of lg.querySelectorAll("[data-mark]")) {
+      const k = it.dataset.mark;
+      it.classList.toggle("is-hidden", !has[k] || (k !== "wide" && !movesOn));
+    }
+    lg.classList.toggle("is-hidden", !lg.querySelector("[data-mark]:not(.is-hidden)"));
+  }
 
   /** Put a "missed" badge on every required note of the gate at `t`. */
   function markMissedAt(t) {
@@ -2127,6 +2152,7 @@
     });
     els.toggleMoves.addEventListener("change", () => {
       roll.showMoves = els.toggleMoves.checked; drawFrame();
+      updateRollLegend();
       store.setSetting("showMoves", els.toggleMoves.checked);
     });
     els.toggleColour.addEventListener("change", () => {
@@ -2457,9 +2483,14 @@
       const reflow = new ResizeObserver((entries) => {
         const w = Math.round(entries[0].contentRect.width);
         const h = Math.round(entries[0].contentRect.height);
+        // Hidden (0 px): nothing can be drawn. Remember it, so that showing the
+        // panel again counts as a change and the score is drawn then — before,
+        // 0 px was ignored and "shown again at the same width" looked like no
+        // change at all.
+        if (!w) { lastW = 0; lastH = 0; return; }
         // Width re-lays the systems out; height matters too when the score is
         // fitted to the panel (hiding the transport in Wait mode makes it taller).
-        const widthChanged = w && Math.abs(w - lastW) >= 8;
+        const widthChanged = Math.abs(w - lastW) >= 8 || sheet.pendingRender;
         const heightChanged = h && Math.abs(h - lastH) >= 12 && sheet.autoFit;
         if (!widthChanged && !heightChanged) return;
         lastW = w; lastH = h;

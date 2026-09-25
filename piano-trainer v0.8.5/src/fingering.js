@@ -392,24 +392,31 @@
     return Math.max(0, Math.min(1, (7 - d) / 5));   // 1 up to a second, 0 from a fifth
   }
   const PASS_REACH = 7;                             // semitones: a thumb pass reaches up to a fifth (arpeggios)
-  // FAST REPEATED NOTES. One finger can re-strike a key only so fast; past
-  // that, pianists change finger on every stroke (3-2-1, 4-3-2-1 — towards
-  // the thumb). The thresholds are a rule of thumb, not a measurement: a
-  // single finger is comfortable down to ~0.2 s between strokes (5 per
-  // second) and is replaced for anything at 0.12 s or faster (8+ per second);
-  // between the two the choice fades from one to the other. A finger change
-  // on the same key at that speed is technique, not a change of position,
-  // so it is never counted as a move.
-  const REP_SLOW = 0.2, REP_FAST = 0.12;
-  function repFastness(ioi) {
-    if (ioi == null) return 0;
-    return Math.max(0, Math.min(1, (REP_SLOW - ioi) / (REP_SLOW - REP_FAST)));
-  }
-  const REP_SAME = 2.5;                             // one finger re-striking at full speed
-  function alternationCost(prev, next) {            // towards the thumb is the natural cycle
-    if (next === prev - 1) return 0.2;
-    if (prev <= 2 && (next === 3 || next === 4)) return 0.4;   // start the cycle again
-    return 1.2;
+  // FAST REPEATED NOTES. A run of quick strokes on one key is played by
+  // changing finger on every stroke (3-2-1, 4-3-2-1 — towards the thumb);
+  // a PAIR of quick notes inside a slower line is not — one finger re-strikes
+  // it, with the wrist. The first version judged each repetition on its own
+  // speed, so in a line of eighths with the odd pair of sixteenths on the
+  // same key (Yui, "Again": E E E-E E E-E A E at 120 BPM) only the pairs
+  // changed finger: 3 3 3 2 3 3 2 on one key, which reads as a mistake and
+  // trains an inconsistent hand. Now a repetition counts only as part of a
+  // RUN: at least REP_RUN_MIN notes on one key, each within REP_RUN_IOI of
+  // the last; a run changes finger throughout, anything else keeps one. A
+  // burst of two or three quick strokes ("E-E E" in that song) is one
+  // finger's job. Both thresholds are rules of thumb — a finger re-strikes
+  // comfortably at around 6-7 strokes a second for a few strokes; it is a
+  // sustained run past that which wants the fingers to take turns — not
+  // measurements.
+  const REP_RUN_IOI = 0.14;                         // seconds between strokes: ~7 a second or faster
+  const REP_RUN_MIN = 4;                            // notes in a row on one key
+  const REP_SAME = 2.5;                             // one finger re-striking inside such a run
+  // The cycle runs towards the thumb (4-3-2-1, 3-2-1) and starts again from
+  // 3 or 4; a run that STARTS on the thumb (1-3-2-1) is the unusual choice.
+  function alternationCost(prev, next, first) {
+    let c = next === prev - 1 ? 0 : (prev === 1 && (next === 3 || next === 4)) ? 0.6 : 1.5;
+    if (first && prev === 1) c += 0.8;
+    else if (first && prev === 2) c += 0.3;     // 3 or 4 is where a run begins
+    return c;
   }
   function isThumbPass(f1, p1, f2, p2) {            // right-hand space, consecutive notes
     if (f1 === f2 || (f1 !== 1 && f2 !== 1) || p1 === p2) return false;
@@ -487,10 +494,21 @@
     };
     // a single key struck again, right after itself
     const repeated = (i) => i >= 1 && O[i].keys.length === 1 && O[i - 1].keys.length === 1 && O[i].keys[0] === O[i - 1].keys[0];
+    // runs of quick repetitions on one key (see REP_RUN_*): inside one, the
+    // finger changes on every stroke; outside, a repeated key keeps its finger
+    const inRun = new Array(n).fill(false);
+    const quick = (i) => repeated(i) && ioi[i] != null && ioi[i] <= REP_RUN_IOI;
+    for (let i = 1; i < n;) {
+      if (!quick(i)) { i++; continue; }
+      let j = i;
+      while (j + 1 < n && quick(j + 1)) j++;
+      if (j - i + 2 >= REP_RUN_MIN) for (let k = i; k <= j; k++) inRun[k] = true;   // notes i-1..j
+      i = j + 1;
+    }
     const stepCost = (m, i, fa2, fa1, jumped) => {
       const fb = repFinger(m, i);
       let c = singleCost(fb, i, K) + shapeCost(m, i);
-      if (!jumped && fb === fa1 && repeated(i)) c += REP_SAME * repFastness(ioi[i]);
+      if (!jumped && fb === fa1 && inRun[i]) c += REP_SAME;
       if (jumped) {
         // The hand lifts: the pair and triple rules describe fingers reaching
         // from key to key WITHOUT moving the hand (a legato connection), which
@@ -539,10 +557,12 @@
         }
         // a fast repeated note may change finger on the key (3-2-1) — the hand
         // stays where it is, so this is neither a jump nor a pass
-        if (repeated(i) && repFastness(ioi[i]) > 0) for (const m of freshI) {
+        if (inRun[i]) for (const m of freshI) {
           const fb = repFinger(m, i);
           if (fb === s.fa1) continue;
-          const v = s.v + singleCost(fb, i, K) + alternationCost(s.fa1, fb) + 3 * (1 - repFastness(ioi[i]));
+          // (the weak-fourth rule is about 4 moving independently in a line;
+          // re-striking one key it is as good as any, and 4-3-2-1 is standard)
+          const v = s.v + (fb === 4 ? 0 : singleCost(fb, i, K)) + alternationCost(s.fa1, fb, !inRun[i - 1]);
           push({ m, fa2: 0, fa1: fb, c: s.c, v, prev: s, moved: false, alt: true });
         }
         // move to a fresh position: a thumb pass (glide, no jump) or a jump.

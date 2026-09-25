@@ -54,9 +54,19 @@ console.log("\nRepeated notes");
 const rep = (ioi) => { const s = songOf([64, 64, 64, 64, 64, 64, 65, 67], "right", ioi); F.annotate(s, "M"); return s.notes.map((n) => n.finger); };
 const fast = rep(0.1), slow = rep(0.5);
 console.log(`        E4 x6 then F G at 0.10 s: ${fast.join("")} · at 0.50 s: ${slow.join("")}`);
-chk("fast repeated notes change finger on every stroke", fast.slice(0, 6).every((f, i) => i === 0 || f !== fast[i - 1]), fast);
-chk("  ...towards the thumb (3-2-1)", fast.slice(0, 3).join("") === "321", fast);
+chk("a run of fast repeated notes changes finger on every stroke", fast.slice(0, 6).every((f, i) => i === 0 || f !== fast[i - 1]), fast);
+chk("  ...in the pianist's cycle: towards the thumb, starting again on 3 or 4 (4-3-2-1, 3-2-1)",
+  fast.slice(0, 6).every((f, i) => i === 0 || f === fast[i - 1] - 1 || (fast[i - 1] === 1 && f >= 3)) && fast[0] >= 3, fast);
 chk("slow repeated notes keep their finger", new Set(slow.slice(0, 6)).size === 1, slow);
+const four = (() => { const s = songOf([64, 64, 64, 64, 65, 67], "right", 0.125); F.annotate(s, "M"); return s.notes.map((n) => n.finger).join(""); })();
+chk("four fast repeats then F G: 4-3-2-1 2-3", four === "432123", four);
+// Yui, "Again", bar 29 at 120 BPM: E E E-E E E-E A E (eighths with pairs of sixteenths).
+// A pair or three of quick notes inside a slower line is ONE finger's job;
+// the first version changed finger on the pairs only (3 3 3 2 3 3 2), reported as a bug.
+const again = (() => { const t = [0, 0.25, 0.5, 0.625, 0.75, 1.0, 1.125, 1.25, 1.5], p = [64, 64, 64, 64, 64, 64, 64, 69, 64];
+  const s = { notes: p.map((m, i) => ({ id: i, midi: m, startSec: t[i], durSec: 0.12, staff: 0 })) }; F.annotate(s, "M"); return s.notes.map((n) => n.finger); })();
+console.log(`        "Again", bar 29: ${again.join(" ")}`);
+chk("short bursts of quick repeats inside a line keep one finger (\"Again\", bar 29)", new Set(again.filter((f, i) => i !== 7)).size === 1, again);
 chk("a finger change on a repeated key is not a hand move", (() => { const s = songOf([64, 64, 64, 64], "right", 0.1); F.annotate(s, "M"); return s.fingerStats.jumps === 0 && s.fingerStats.passes === 0 && s.fingerStats.alternations === 3; })());
 
 console.log("\nChords too wide for the hand");

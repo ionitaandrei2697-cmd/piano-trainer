@@ -9,7 +9,7 @@
  *
  * Bump CACHE when files change to invalidate the old cache.
  * ========================================================================== */
-const CACHE = "piano-trainer-v21";
+const CACHE = "piano-trainer-v22";
 const SHELL = [
   "./",
   "index.html",

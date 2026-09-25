@@ -165,6 +165,12 @@
             <span class="hud__text" id="hudText"></span>
             <span class="hud__bar is-hidden" id="hudBarWrap"><i id="hudBar"></i></span>
           </div>
+          <!-- what the marks under the falling notes mean (only the ones this piece has) -->
+          <div class="rolllegend is-hidden" id="rollLegend" aria-hidden="true">
+            <span class="rolllegend__item" data-mark="jump"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M3.5 2v8M8.5 2v8"/></svg>hand jumps to a new position</span>
+            <span class="rolllegend__item" data-mark="pass"><svg viewBox="0 0 14 12" width="14" height="12"><path d="M2 4a5 5 0 0 0 10 0"/></svg>thumb passes under (or a finger over)</span>
+            <span class="rolllegend__item" data-mark="wide"><svg viewBox="0 0 8 14" width="8" height="14"><path d="M4 13l2-2-2-2 2-2-2-2 2-2-2-2"/></svg>too wide for your hand: roll it</span>
+          </div>
           <canvas id="rollCanvas" class="roll" role="img" aria-label="Falling notes. Click to seek, scroll to scrub, right-click to step back one chord."></canvas>
         </div>
         <div class="kbwrap" id="keyboardPanel">
@@ -317,7 +323,7 @@
         <label class="chip" title="The bar that marks your place in the score"><input type="checkbox" id="toggleCursor" checked /> Cursor</label>
         <label class="chip" title="Size the score so a whole system fits the panel"><input type="checkbox" id="toggleFit" checked /> Fit score</label>
         <label class="chip" title="Colour the noteheads as you play: green played, red missed or wrong, amber right note but wrong length"><input type="checkbox" id="toggleColour" checked /> Colour notes as played</label>
-        <label class="chip" title="On the falling notes: an amber bar where the hand jumps to a new position, a thin arc where the thumb passes under"><input type="checkbox" id="toggleMoves" checked /> Hand moves</label>
+        <label class="chip" title="On the falling notes: two bars (‖) where the whole hand lifts and jumps to a new position, an arc (◡) where the thumb passes under or a finger crosses over it"><input type="checkbox" id="toggleMoves" checked /> Hand moves</label>
       </div>
       <div class="setgroup__row">
         <label class="knob knob--inline"><span class="knob__label">Zoom <em id="zoomVal">auto</em></span>
