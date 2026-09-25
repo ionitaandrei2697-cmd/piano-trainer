@@ -35,7 +35,9 @@ Several take a directory argument so you can diff against another build:
 `node tests/cursorfinal.js ../piano-trainer`.
 
 `harness.js` serves the app on a random port and returns a puppeteer page.
-If puppeteer can't find Chrome, set `executablePath` in `harness.js`.
+Every test finds the app relative to its own folder, so the suite runs from any
+checkout. If puppeteer has no Chrome of its own, point it at any Chromium:
+`CHROME_PATH=/path/to/chrome node tests/audit.js`.
 
 ## Usability audit
 
@@ -89,4 +91,15 @@ node tests/smfdump.js FILE   # byte-level dump of any MIDI file: tracks, channel
 node tests/round8.js         # quick start, first-run card, HUD over the falling notes, hold progress
 node tests/round9.js         # other hand silent (and the opt-in), no doubled notes, hover-only messages,
                              # errors still shown, finger discs, taller falling notes
+```
+
+## Score import, fingering for your hand
+
+```bash
+node tests/scoreimport.js    # 31 checks: UTF-16/Latin-1/BOM files, .mxl variants, a zip saved as .xml,
+                             # MIDI saved as .musicxml, part-list faults (the "incomplete" error),
+                             # short parts, crashing content, score-timewise, voice + piano parts,
+                             # grace notes, and the notes-only fallback when the engine refuses a score
+node tests/fingervariants.js # (Node) small hands keep method-book fingerings, the four styles,
+                             # fast repeated notes (3-2-1), chords too wide for the hand, suggestions
 ```

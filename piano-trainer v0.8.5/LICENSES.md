@@ -6,7 +6,7 @@ any non-open-source project.
 
 | Library | Version | License | Use |
 |---|---|---|---|
-| [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) | 1.9.9 | BSD-3-Clause | Music notation rendering + cursor |
+| [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) | 2.1.3 | BSD-3-Clause | Music notation rendering + cursor |
 | [Tone.js](https://github.com/Tonejs/Tone.js) | 15.1.22 | MIT | Audio context, synth, scheduling primitives |
 | [@tonejs/midi](https://github.com/Tonejs/Midi) | 2.0.28 | MIT | MIDI file parsing |
 | [soundfont-player](https://github.com/danigb/soundfont-player) | 0.2.1 | MIT | Optional sampled instruments |

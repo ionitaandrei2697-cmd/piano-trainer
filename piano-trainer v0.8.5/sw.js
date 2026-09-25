@@ -9,7 +9,7 @@
  *
  * Bump CACHE when files change to invalidate the old cache.
  * ========================================================================== */
-const CACHE = "piano-trainer-v20";
+const CACHE = "piano-trainer-v21";
 const SHELL = [
   "./",
   "index.html",
@@ -25,6 +25,7 @@ const SHELL = [
   "src/keys.js",
   "src/timing.js",
   "src/mxl.js",
+  "src/score-import.js",
   "src/parser.js",
   "src/theory.js",
   "src/convert-midi-to-xml.js",

@@ -3,7 +3,7 @@
  * may make a slowly repeated note change finger in the re-fit around it.
  * (In the engine before the hand-position rework, pinning the first D4 of bar 4
  * to 5 re-fitted the next D4 to 1.) */
-const dir=process.argv[2]||"/home/claude/work/out/src/"; globalThis.PT={keys:require(dir+"keys.js")};
+const dir=process.argv[2]||(require("path").join(__dirname,"..","src")+"/"); globalThis.PT={keys:require(dir+"keys.js")};
 const F=require(dir+"fingering.js");
 const n=(s)=>s.trim().split(/\s+/).map(t=>{const m=t.match(/^([A-G])(\d)$/);return 12*(+m[2]+1)+{C:0,D:2,E:4,F:5,G:7,A:9,B:11}[m[1]];});
 const RH=n("E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4 D4 D4 E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4 C4 C4");

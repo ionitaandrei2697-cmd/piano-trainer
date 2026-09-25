@@ -1,11 +1,11 @@
 const puppeteer=require("puppeteer"), http=require("http"), fs=require("fs"), path=require("path");
-const ROOT=process.argv[2]||"/home/claude/work/out";
+const ROOT=process.argv[2]||require("path").join(__dirname,"..");
 const MIME={".html":"text/html",".js":"text/javascript",".css":"text/css",".svg":"image/svg+xml"};
 (async()=>{
   const srv=http.createServer((q,s)=>{let p=decodeURIComponent(q.url.split("?")[0]);if(p==="/")p="/index.html";
     fs.readFile(path.join(ROOT,p),(e,d)=>{if(e){s.writeHead(404);return s.end();}s.writeHead(200,{"Content-Type":MIME[path.extname(p)]||"application/octet-stream"});s.end(d);});});
   await new Promise(r=>srv.listen(0,r));
-  const b=await puppeteer.launch({headless:"new",executablePath:"/home/claude/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome",args:["--no-sandbox","--mute-audio"]});
+  const b=await puppeteer.launch({headless:"new",executablePath:(process.env.CHROME_PATH||undefined),args:["--no-sandbox","--mute-audio"]});
   const pg=await b.newPage();
   await pg.goto("http://localhost:"+srv.address().port+"/index.html?debug",{waitUntil:"networkidle2"});
   await pg.waitForFunction("window.PT && window.PT.__app",{timeout:15000});

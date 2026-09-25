@@ -1,5 +1,5 @@
 const {open}=require("./harness");
-(async()=>{const {pg,close}=await open("/home/claude/work/out");
+(async()=>{const {pg,close}=await open(require("path").join(__dirname,".."));
 for (const w of [1440,1360,1280]) { await pg.setViewport({width:w,height:900});
   await new Promise(r=>setTimeout(r,300));
   const r=await pg.evaluate(()=>{const rail=document.querySelector(".rail");const groups=[...rail.querySelectorAll(".rail__group")];

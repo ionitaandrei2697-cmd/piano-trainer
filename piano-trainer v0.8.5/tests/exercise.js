@@ -1,5 +1,5 @@
 const {open}=require("./harness");
-const ROOT=process.argv[2]||"/home/claude/work/piano-trainer";
+const ROOT=process.argv[2]||require("path").join(__dirname,"..");
 (async()=>{
   const {pg,logs,close}=await open(ROOT);
   const report=[];

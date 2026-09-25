@@ -1,6 +1,6 @@
 const puppeteer=require("puppeteer");
 (async()=>{
-  const b=await puppeteer.launch({headless:"new",executablePath:"/home/claude/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome",
+  const b=await puppeteer.launch({headless:"new",executablePath:(process.env.CHROME_PATH||undefined),
     args:["--no-sandbox","--autoplay-policy=no-user-gesture-required","--mute-audio"]});
   const pg=await b.newPage(); const errs=[]; pg.on("pageerror",e=>errs.push(e.message));
   const failed=[]; pg.on("requestfailed",r=>failed.push(r.url())); 

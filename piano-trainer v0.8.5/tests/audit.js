@@ -3,7 +3,7 @@
  * path (connect, note on/off, velocity-0 note-off, sustain, hot-plug,
  * transport buttons) runs through the app's own code. */
 const puppeteer=require("puppeteer"), http=require("http"), fs=require("fs"), path=require("path");
-const ROOT=process.argv[2]||"/home/claude/work/out";
+const ROOT=process.argv[2]||require("path").join(__dirname,"..");
 const MIME={".html":"text/html",".js":"text/javascript",".css":"text/css",".json":"application/json",".webmanifest":"application/manifest+json",".svg":"image/svg+xml",".mid":"audio/midi",".mxl":"application/zip"};
 const results=[]; let area="";
 const rec=(name,ok,detail)=>results.push({area,name,ok:!!ok,detail});
@@ -11,7 +11,7 @@ const rec=(name,ok,detail)=>results.push({area,name,ok:!!ok,detail});
   const srv=http.createServer((req,res)=>{let p=decodeURIComponent(req.url.split("?")[0]); if(p==="/")p="/index.html";
     fs.readFile(path.join(ROOT,p),(e,d)=>{ if(e){res.writeHead(404);return res.end();} res.writeHead(200,{"Content-Type":MIME[path.extname(p)]||"application/octet-stream"}); res.end(d); });});
   await new Promise(r=>srv.listen(0,r)); const port=srv.address().port;
-  const b=await puppeteer.launch({headless:"new",executablePath:"/home/claude/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome",
+  const b=await puppeteer.launch({headless:"new",executablePath:(process.env.CHROME_PATH||undefined),
     args:["--no-sandbox","--autoplay-policy=no-user-gesture-required","--mute-audio"]});
   const pg=await b.newPage();
   const errors=[]; pg.on("pageerror",e=>errors.push(e.message));
@@ -48,8 +48,8 @@ const rec=(name,ok,detail)=>results.push({area,name,ok:!!ok,detail});
       await new Promise(r=>setTimeout(r,2400));return document.getElementById("status").textContent;},k);
     rec("sample: "+k, /Loaded notation/.test(ok), ok);
   }
-  const b64=fs.readFileSync("/home/claude/work/t/fixtures/ode.mxl").toString("base64");
-  const inp=await pg.$("#fileInput"); await inp.uploadFile("/home/claude/work/t/fixtures/ode.mxl"); await W(2800);
+  const b64=fs.readFileSync(require("path").join(__dirname,"fixtures","ode.mxl")).toString("base64");
+  const inp=await pg.$("#fileInput"); await inp.uploadFile(require("path").join(__dirname,"fixtures","ode.mxl")); await W(2800);
   rec("open .mxl via file picker", /Loaded notation/.test(await st()), await st());
   // MIDI file: export the current piece, then open it back
   const midiPath="/tmp/audit-export.mid";

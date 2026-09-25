@@ -248,7 +248,7 @@
           const wanted = this.expected && this.expected.has(n.midi) &&
                          Math.abs(n.startSec - posSec) < 0.05;
           this._drawNote(k.x + 1, yTop, k.w - 2, height, n.staff, k.isBlack, active, n.finger, n.midi, wanted,
-                         this.showMoves ? n.handMove : null, n.pinned);
+                         this.showMoves ? n.handMove : null, n.pinned, n.wide);
           if (dim) c.globalAlpha = 1;
         }
       }
@@ -379,7 +379,7 @@
       c.restore();
     }
 
-    _drawNote(x, y, w, h, staff, isBlack, active, finger, midi, wanted, move, pinned) {
+    _drawNote(x, y, w, h, staff, isBlack, active, finger, midi, wanted, move, pinned, wide) {
       const c = this.ctx, T = this.theme || this.readTheme();
       // Right hand warm (gold), left hand cool (lapis) — the same two colours
       // that light the keys below. A vertical gradient gives each note a lit
@@ -438,6 +438,24 @@
         };
         c.strokeStyle = "rgba(10,14,22,0.9)"; c.lineWidth = move === "jump" ? 4.5 : 3.5; draw();   // halo
         c.strokeStyle = T.ivory; c.lineWidth = move === "jump" ? 2 : 1.6; draw();
+        c.restore();
+      }
+      // TOO WIDE FOR YOUR HAND: the chord spans more than this hand can
+      // stretch (Settings -> Your hand). The arpeggio sign — a wavy line up
+      // the note's left edge — says what a pianist does with it: roll it, or
+      // take the far note with the other hand.
+      if (wide && h >= 12 && w >= 8) {
+        // above the finger disc (which sits at the bottom of the note), so the
+        // two never overlap in a narrow lane
+        const discTop = finger && h >= 2 * fr + 4 && w >= 12 ? y + h - 2 * fr - 6 : y + h - 3;
+        const lx = x + w / 2 - 1, y0 = discTop, y1 = Math.max(y + 3, y0 - 22);
+        c.save();
+        c.beginPath();
+        let up = 0;
+        for (let yy = y0; yy > y1; yy -= 3, up++) c.lineTo(lx + (up % 2 ? 2.2 : -0.2), yy);
+        c.lineCap = "round"; c.lineJoin = "round";
+        c.strokeStyle = "rgba(10,14,22,0.9)"; c.lineWidth = 3.2; c.stroke();
+        c.strokeStyle = T.ivory; c.lineWidth = 1.4; c.stroke();
         c.restore();
       }
       // NOTE NAMES deliberately live on the KEYS, not here. A falling block is

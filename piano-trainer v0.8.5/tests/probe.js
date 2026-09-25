@@ -1,4 +1,4 @@
-const path="/home/claude/work/out/src/";
+const path=(require("path").join(__dirname,"..","src")+"/");
 const keys=require(path+"keys.js");
 const timing=require(path+"timing.js");
 const practiceMod=require(path+"practice.js");
@@ -29,6 +29,7 @@ const song={notes:[
  {midi:64,startSec:1,durSec:.5,staff:0},
 ]};
 const p=new P();
+p.setLengthMode("off");      // a hold is required by default; this checks the gate logic alone
 p.build(song,"wait","right");
 ok("gates = 3 for RH", p.events.length===3, p.events.length);
 ok("total required = 3", p.score.total===3, p.score.total);
@@ -44,7 +45,10 @@ ok("follow: all missed after passing", p2.score.missed===4, p2.score.missed);
 
 // audioAllows policy
 ok("listen+right solos RH", P.audioAllows("listen","right",0)===true && P.audioAllows("listen","right",1)===false);
-ok("wait+right mutes RH",  P.audioAllows("wait","right",0)===false && P.audioAllows("wait","right",1)===true);
+// Follow/Wait: the app never plays the hand you are learning, and the other
+// hand only when asked ("Play the other hand for me")
+ok("wait+right mutes RH",  P.audioAllows("wait","right",0)===false && P.audioAllows("wait","right",1)===false
+                          && P.audioAllows("wait","right",1,true)===true && P.audioAllows("wait","right",0,true)===false);
 
 // densest error window
 ok("densest null under 3", P.densestErrorWindow([1,2],8)===null);

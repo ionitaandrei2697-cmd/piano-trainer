@@ -1,7 +1,7 @@
 // Node harness for transport.js with a fake audio engine + fake timers.
 global.window = global;               // transport attaches to root.PT
 const fs=require("fs");
-eval(fs.readFileSync("/home/claude/work/out/src/transport.js","utf8"));
+eval(fs.readFileSync(require("path").join(__dirname,"..","src","transport.js"),"utf8"));
 const Transport = global.PT.Transport;
 
 let T = 0;                            // fake ctx clock

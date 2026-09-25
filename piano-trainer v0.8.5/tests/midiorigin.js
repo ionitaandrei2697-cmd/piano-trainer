@@ -1,6 +1,6 @@
 const puppeteer=require("puppeteer");
 (async()=>{
-  const b=await puppeteer.launch({headless:"new",executablePath:"/home/claude/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome",
+  const b=await puppeteer.launch({headless:"new",executablePath:(process.env.CHROME_PATH||undefined),
     args:["--no-sandbox","--mute-audio"]});
   const probe=async(url,label)=>{
     const pg=await b.newPage();
@@ -22,7 +22,7 @@ const puppeteer=require("puppeteer");
   const http=require("http"),fs=require("fs");
   const srv=http.createServer((q,s)=>{s.writeHead(200,{"Content-Type":"text/html"});s.end("<!doctype html><title>x</title>");});
   await new Promise(r=>srv.listen(8123,r));
-  await probe("file:///home/claude/work/out/index.html","file://");
+  await probe(require("url").pathToFileURL(require("path").join(__dirname,"..","index.html")).href,"file://");
   await probe("http://localhost:8123/","http://localhost");
   await probe("http://127.0.0.1:8123/","http://127.0.0.1");
   srv.close(); await b.close(); process.exit(0);

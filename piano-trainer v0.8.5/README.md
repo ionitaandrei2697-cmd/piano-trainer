@@ -103,11 +103,12 @@ slider; the lead time is just the view height divided by that speed.
 
 The toolbar holds only what you touch while playing: **Mode**, **Hand**,
 **Repeat**, **Metronome**, and the tools (Drill, Fingering, Settings).
-Everything else lives in **Settings**: the **Panels** (score, falling notes,
-keyboard), what to **Show** on them (note names, beat grid, cursor, fit score,
-and **Colour notes as played** — the green/red/amber overlay, which can be
-turned off), the **Coach** (timing window, note length, auto tempo), and
-**Device & sound**.
+Everything else lives in **Settings**, one section at a time: **This piece**
+(what loading it did, its parts, export, reset fingering), **Hand & fingering**
+(your hand, and the fingering styles for this piece), **View** (the panels, and
+what to show on them — note names, beat grid, cursor, fit score, **Colour notes
+as played**), **Coach** (timing window, note length, auto tempo), **Metronome**,
+**Sound & keyboard**, and **Your data**.
 
 **Practice hand** always means *the hand you're working on*. In **Listen** it
 solos that hand — only it plays, so you can learn a part by ear. In
@@ -350,9 +351,10 @@ and `'` keys do not type `;` and `'` at all.
   *Bright piano*, *Electric piano*, *Harpsichord*, *Vibraphone* and *Music box*
   download once from the General-MIDI soundfont CDN and then stay cached, so
   switching back is instant. Any load failure falls back to the synth.
-- **Saved pieces** — MusicXML pieces you load are remembered and reappear in the
-  dropdown, and the last one reopens automatically next visit. (MIDI files
-  aren't re-stored as bytes; re-open them from disk.)
+- **Saved pieces** — pieces you load (MusicXML and MIDI) are remembered and
+  reappear in the dropdown, and the last one reopens automatically next visit.
+  Opening the same file again finds the same saved piece, with its fingering
+  edits and best score.
 - **Note names** — letter+octave labels on the white keys. They belong on the
   keyboard rather than on the falling notes: a falling block already tells you
   its pitch by which lane it is in, the letter only fitted on longer notes (so
@@ -390,7 +392,18 @@ IndexedDB.
 
 ## Loading pieces
 
-- **MusicXML** (`.xml`, `.musicxml`) → full notation + all three views.
+- **MusicXML** (`.xml`, `.musicxml`) → full notation + all three views. Files
+  are read by what they contain, not by their extension (a zipped score saved
+  as `.xml`, a MIDI file called `.musicxml`), in their real encoding (UTF-16
+  from Finale and Sibelius, Latin-1 from old exporters), and repaired where the
+  notation engine would otherwise refuse them — see *Scores that wouldn't
+  open* below. The load message lists anything that was repaired.
+- **Scores with several parts** (a song for voice and piano, a band
+  arrangement): the piano part is the one you practise — its upper staff the
+  right hand, its lower staff the left — and the other parts play along as
+  backing. **Settings → This piece** lists the parts, as it does a MIDI file's
+  tracks, and lets you change them. Grace notes are heard as ornaments and are
+  never required (playing one isn't counted as a wrong note).
 - **Compressed MusicXML** (`.mxl`) → the same, unzipped in the browser. This is
   what MuseScore and musescore.com hand you by default, so most scores you
   download open directly now. It uses the platform's own
@@ -451,8 +464,9 @@ playback timing is exact; DAW barlines may not align in tempo-change sections.
 - **MIDI files** have no sheet view (no notation in the format).
 - **Fingering** is a suggestion, not an authority. Even two professional
   pianists choose the same finger for only about 60–80% of notes, so edits will
-  always be part of it — the aim is to get the standard cases right and make an
-  edit cheap (see *How the automatic fingering works*).
+  always be part of it — the aim is to get the standard cases right for *your*
+  hand (Settings → Hand & fingering) and make an edit cheap (see *How the
+  automatic fingering works*).
 - **Realistic piano** and **web fonts** need the network the first time; the core
   app (synth, parsing, all views, scoring) is fully offline.
 - **Tempo changes inside a MIDI file** are read for playback but the bar map (and
@@ -479,6 +493,7 @@ piano-trainer/
     keys.js               shared keyboard geometry (keyboard ↔ falling notes)
     timing.js             musical-time ↔ seconds (tempo map)
     mxl.js                compressed MusicXML (.mxl) reader
+    score-import.js       decode by real encoding, repair, fall back (why scores used to be refused)
     parser.js             note model from OSMD / MIDI
     fingering.js          automatic fingering (editable)
     profiles.js           hardware/keyboard profiles
@@ -570,13 +585,59 @@ chords takes about half a second.
 thumb on B♭ (the textbook is 1-2-3-4-1-2-3-4 — one *Every B♭4* edit fixes the
 piece), and the left-hand C arpeggio comes out 5-3-2-1, which many teachers
 accept for smaller hands. The definitions are modelling choices: "comfortable"
-is Parncutt's table for an average adult hand (set your hand size in the
-profile if yours is smaller), a thumb pass reaches up to a fifth, and fast
-repeated notes are not given the 3-2-1 alternation pianists use at speed. And
+is Parncutt's table for an average adult hand, scaled to yours (see *Your hand*
+below), and a thumb pass reaches up to a fifth. And
 fingering is personal: two professional pianists choose the same finger for
 only 60–80% of notes (Nakamura, Saito & Yoshii 2020). What the engine now
 guarantees is narrower and checkable: under the definition above, no fingering
 has fewer hand moves than the one it suggests.
+
+### Your hand
+
+**Settings → Hand & fingering** asks the question a teacher asks: *what is the
+widest interval you can play, thumb to little finger?* — less than an octave,
+an octave, a ninth, between a ninth and a tenth (the average adult hand the
+model was built on), a tenth, an eleventh or more. Or type your hand span in
+centimetres (thumb tip to little-finger tip, spread flat); it is turned into an
+interval by a **rule of thumb** — a white key is 2.35 cm, about 2 cm goes to
+the fingertips landing inside the keys — so the interval you actually play is
+the better guide.
+
+The size changes the **stretch beyond a five-finger position**, not the
+position itself. The keys are the same width for every hand, so every hand
+plays C-D-E-F-G (or C-D-E♭-F-G) comfortably; what a larger hand does is reach
+further past it. (Scaling the whole table instead — what the engine used to do
+— turned a small hand's five-finger position into a "stretch": its method-book
+agreement fell to 61.6%. It is 95.7% now, and the average hand is unchanged.)
+
+A chord wider than your hand can stretch gets an **arpeggio sign** — a wavy line
+up its left edge on the falling notes: roll it, or take the far note with the
+other hand.
+
+### Fingering styles
+
+There is no single right fingering, and much of the choice is about the hand.
+The same exact search runs with four definitions of "one hand position", and
+**Settings → Hand & fingering** shows each one's cost on the open piece —
+*shifts* (the whole hand jumps), *passes* (thumb under, finger over), and
+*stretches* (spans past what is comfortable for your hand):
+
+| style | a hand position is… | good for |
+|---|---|---|
+| **Balanced** | within the comfortable span; fewest moves, then comfort | the method-book choice |
+| **Stay in position** | up to the widest practical stretch | a hand that reaches a tenth: fewer shifts |
+| **Relaxed hand** | never past a relaxed span | small hands, beginners: no stretching |
+| **Legato** | as Balanced, but a jump costs three passes, not two | joined lines: pass rather than lift |
+
+One is suggested for your hand (relaxed up to about an octave, stay-in-position
+from a tenth — a rule of thumb); the one you pick is remembered per piece, and
+your own finger edits stay pinned in every style.
+
+**Fast repeated notes change finger** — 3-2-1, towards the thumb — when they
+come faster than about 8 a second, and keep one finger slower than about 5 a
+second (a rule of thumb for where one finger stops being able to keep up; in
+between the choice fades from one to the other). A finger change on the same
+key is technique, not a move of the hand, so it is never counted as a shift.
 
 ## Practice, by the research
 
@@ -701,6 +762,58 @@ and the keyboard shortcuts reach everything.
 ---
 
 ## What changed in this revision
+
+### Scores that wouldn't open, fingering for your hand, a calmer interface
+
+**"Error: given music sheet was incomplete or could not be loaded."** That is
+the notation library's catch-all: it says it whenever its reader fails, for any
+reason. So every reason was hunted down — in 1,015 real scores from three
+collections, 647 damaged or re-encoded files, and 1,660 pieces through the
+app's own MIDI→notation converter (which never failed). What made scores fail:
+
+- **A part list that disagrees with the parts** — a part the list doesn't name,
+  mismatched ids, an empty list, a part with no bars. This is the reported
+  message, word for word.
+- **UTF-16 files** (Finale, Sibelius, older exporters) were decoded as UTF-8:
+  18% of one collection's `.mxl` scores could not be opened.
+- **Invalid content** that crashed the reader or the renderer: a chord mark on a
+  rest, a German "H" for B, a missing octave, a time signature like "a/b", an 8va
+  line that never ends.
+- **The wrong kind of file** under a score's name: a zipped score saved as
+  `.xml`, a MIDI file, a web page saved by a failed download.
+
+Each is now repaired before the engine sees the file, and the load message says
+what was changed. A score the engine still refuses is tried again simplified,
+and failing that opens **as notes only** — the falling notes, the keyboard,
+scoring and every mode work — with a button to *make a simple score* from the
+notes. Found on the way: a part **shorter than the others silently cut the
+score off** at its end (46 notes became 6), and in a song for **voice and piano
+the vocal line was "the right hand"** and both piano staves "the left". Both
+fixed; grace notes are now ornaments rather than chord notes. The notation
+engine was updated (OSMD 2.1.3): it loads the test scores 1.6–2.7× faster here.
+Result: every one of 1,015 real scores opens with notation (was 961).
+
+**Fingering for your hand.** The hand size had no control in the page, and
+the model it drove made a small hand's five-finger position a "stretch". Now
+you describe your hand (Settings → Hand & fingering), the size scales only the
+stretch beyond a five-finger position, four fingering styles are compared on
+the piece with what each costs, fast repeated notes change finger, and chords
+too wide for your hand are marked. See *Your hand* and *Fingering styles*.
+
+**The interface.** Settings in sections instead of one long column; the start
+screen on the page where the score will be, instead of a card above an empty
+page; what just happened (a piece loaded, a setting changed, an error) as a
+short notice under the toolbar instead of only on hover; no "Piano" label
+eating the score's width when there is only one part; a two-row header on a
+phone instead of three.
+
+**Also fixed:** the sheet cursor stayed at a stale position after the panel
+re-flowed (it was re-drawn through a property that didn't exist); a quick first
+tap before the audio had started could leave a note ringing; the same MusicXML
+file opened twice made two saved pieces; **C** didn't reset the repeat's pass
+count; the test suite ran only on its author's machine (hard-coded paths, one
+Chrome binary) — it now runs anywhere (`CHROME_PATH` for your Chromium). Details
+and measurements are in `AUDIT.md`, round 3.
 
 ### One hand at a time, readable fingers, room for the falling notes
 

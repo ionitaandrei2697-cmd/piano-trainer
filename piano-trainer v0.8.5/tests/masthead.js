@@ -1,5 +1,5 @@
 const {open}=require("./harness");
-(async()=>{const {pg,close}=await open("/home/claude/work/out");
+(async()=>{const {pg,close}=await open(require("path").join(__dirname,".."));
 await pg.setViewport({width:1440,height:830});
 await pg.evaluate(async()=>{const s=document.getElementById("sampleList");s.value="minuetG";s.dispatchEvent(new Event("change"));await new Promise(r=>setTimeout(r,2800));});
 const r=await pg.evaluate(()=>{const w=(e)=>Math.round(e.getBoundingClientRect().width);

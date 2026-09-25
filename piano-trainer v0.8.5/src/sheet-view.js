@@ -85,6 +85,14 @@
       this._marks = new Map();
       this._noteEls = new Map();
       await this.osmd.load(xml);
+      // A lone "Piano" label at the left of every system cost ~100px of width
+      // (and so zoom) and says nothing the header doesn't. With several parts
+      // (voice and piano, a band) the names are how you tell staves apart.
+      try {
+        const n = (this.osmd.Sheet && this.osmd.Sheet.Instruments || []).length;
+        this.osmd.EngravingRules.RenderPartNames = n > 1;
+        this.osmd.EngravingRules.RenderPartAbbreviations = n > 1;
+      } catch (e) { /* older builds: keep the defaults */ }
       this.osmd.Zoom = this.autoFit ? 1 : (this.osmd.Zoom || 1);
       this._loaded = true;
       if (this.autoFit) this.fitToPanel(); else this.osmd.render();
@@ -176,9 +184,12 @@
 
     /** Everything that must happen after OSMD rebuilds the SVG. */
     _afterRender() {
-      if (this.cursor) {
-        this.cursor.show();
-        this.cursor.update();
+      // (this read `this.cursor`, which never existed — the cursor lives on
+      // the OSMD instance — so after a re-flow the cursor stayed at its old
+      // pixel position until playback next moved it)
+      const c = this.osmd && this.osmd.cursor;
+      if (c) {
+        try { c.show(); c.update(); } catch (e) { /* cursor past the end */ }
         this._applyCursorVisibility();
       }
       this._rebuildNoteMap();

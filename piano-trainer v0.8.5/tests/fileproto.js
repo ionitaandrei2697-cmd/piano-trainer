@@ -1,10 +1,10 @@
 const puppeteer=require("puppeteer");
 (async()=>{
-  const b=await puppeteer.launch({headless:"new",executablePath:"/home/claude/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome",
+  const b=await puppeteer.launch({headless:"new",executablePath:(process.env.CHROME_PATH||undefined),
     args:["--no-sandbox","--allow-file-access-from-files","--autoplay-policy=no-user-gesture-required","--mute-audio"]});
   const pg=await b.newPage();
   const errs=[]; pg.on("pageerror",e=>errs.push(e.message));
-  await pg.goto("file:///home/claude/work/out/index.html",{waitUntil:"networkidle2"});
+  await pg.goto(require("url").pathToFileURL(require("path").join(__dirname,"..","index.html")).href,{waitUntil:"networkidle2"});
   await new Promise(r=>setTimeout(r,2500));
   const out=await pg.evaluate(async()=>{
     const s=document.getElementById("sampleList"); s.value="twoHand"; s.dispatchEvent(new Event("change"));

@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,logs,close}=await open("/home/claude/work/out");
+  const {pg,logs,close}=await open(require("path").join(__dirname,".."));
   await pg.setViewport({width:1440,height:900});
   let pass=0,fail=0;
   const chk=(n,ok,x)=>{ok?pass++:fail++;console.log((ok?"  PASS  ":"  FAIL  ")+n+(!ok&&x!==undefined?"  <- "+JSON.stringify(x):""));};

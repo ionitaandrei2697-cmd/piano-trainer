@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,close}=await open(process.argv[2]||"/home/claude/work/out");
+  const {pg,close}=await open(process.argv[2]||require("path").join(__dirname,".."));
   for (const [w,h] of [[1440,900],[1280,800],[1512,982],[1024,768],[390,844]]) {
     await pg.setViewport({width:w,height:h,deviceScaleFactor:1});
     await pg.evaluate(async()=>{const s=document.getElementById("sampleList");

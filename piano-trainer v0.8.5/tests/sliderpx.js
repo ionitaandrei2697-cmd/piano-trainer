@@ -4,7 +4,7 @@
 const {open}=require("./harness");
 (async()=>{
   const touch=!!process.env.TOUCH;
-  const {pg,close}=await open("/home/claude/work/out");
+  const {pg,close}=await open(require("path").join(__dirname,".."));
   const cdp=await pg.target().createCDPSession();
   if (touch) {
     // setViewport with hasTouch RELOADS the page in puppeteer — wait for the new document

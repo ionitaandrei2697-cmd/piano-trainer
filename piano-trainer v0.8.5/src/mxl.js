@@ -78,10 +78,14 @@
   }
 
   /**
-   * Extract the MusicXML text from a .mxl ArrayBuffer.
-   * @returns {Promise<string>} the score as MusicXML text
+   * The score entry's raw bytes. Decoding is the caller's job: Finale and
+   * others store the score as UTF-16 inside the archive, and decoding it as
+   * UTF-8 (which this function used to do) turned every such .mxl into
+   * "doesn't contain a MusicXML score" — 42 of 232 scores in the music21
+   * corpus. score-import.js decodes by BOM / byte pattern / declaration.
+   * @returns {Promise<Uint8Array>}
    */
-  async function extract(buf) {
+  async function extractBytes(buf) {
     const entries = readEntries(buf);
     if (!entries.length) throw new Error("The .mxl archive is empty.");
     const dec = new TextDecoder("utf-8");
@@ -90,21 +94,39 @@
     const container = entries.find((e) => e.name.toLowerCase() === "meta-inf/container.xml");
     if (container) {
       const xml = dec.decode(await readEntry(buf, container));
-      const m = /<rootfile[^>]*full-path\s*=\s*"([^"]+)"/i.exec(xml);
-      if (m) wanted = entries.find((e) => e.name === m[1]);
+      // the first rootfile that is MusicXML (an archive may also list a PDF);
+      // attributes can be quoted either way
+      const re = /<rootfile\b([^>]*)>/gi;
+      let m;
+      while (!wanted && (m = re.exec(xml))) {
+        const path = /full-path\s*=\s*(["'])(.*?)\1/i.exec(m[1]);
+        const type = /media-type\s*=\s*(["'])(.*?)\1/i.exec(m[1]);
+        if (!path || (type && !/musicxml|xml/i.test(type[2]))) continue;
+        wanted = entries.find((e) => e.name === path[2]) || null;
+      }
     }
     if (!wanted) {
       wanted = entries.find((e) => !/^meta-inf\//i.test(e.name) && /\.(musicxml|xml)$/i.test(e.name));
     }
     if (!wanted) throw new Error("No MusicXML file inside the .mxl archive.");
-    const text = dec.decode(await readEntry(buf, wanted));
+    return readEntry(buf, wanted);
+  }
+
+  /**
+   * Extract the MusicXML text from a .mxl ArrayBuffer.
+   * @returns {Promise<string>} the score as MusicXML text
+   */
+  async function extract(buf) {
+    const bytes = await extractBytes(buf);
+    const si = root.PT && root.PT.scoreImport;
+    const text = si ? si.decodeText(bytes) : new TextDecoder("utf-8").decode(bytes);
     if (!/<score-(partwise|timewise)/i.test(text)) {
       throw new Error("The .mxl archive doesn't contain a MusicXML score.");
     }
     return text;
   }
 
-  const api = { extract, readEntries };
+  const api = { extract, extractBytes, readEntries };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else { root.PT = root.PT || {}; root.PT.mxl = api; }
 })(typeof window !== "undefined" ? window : globalThis);

@@ -2,7 +2,7 @@
  * the app must still open from the cache. Then prove an update is picked up. */
 const puppeteer=require("puppeteer"); const {execSync}=require("child_process");
 (async()=>{
-  const b=await puppeteer.launch({headless:"new",executablePath:"/home/claude/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome",
+  const b=await puppeteer.launch({headless:"new",executablePath:(process.env.CHROME_PATH||undefined),
     args:["--no-sandbox","--mute-audio"]});
   const pg=await b.newPage(); const notOk=[]; pg.on("response",r=>{ if(r.status()>=400) notOk.push(r.status()+" "+r.url()); });
   await pg.goto("http://127.0.0.1:8765/",{waitUntil:"networkidle2"});
