@@ -1,0 +1,1 @@
+MIT License — soundfont-player (c) danigb. https://github.com/danigb/soundfont-player

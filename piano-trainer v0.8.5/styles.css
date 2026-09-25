@@ -1,0 +1,918 @@
+/* ============================================================================
+ * styles.css  —  "Urtext" theme
+ * ----------------------------------------------------------------------------
+ * Grounded in the object a pianist actually has on the stand: a scholarly
+ * edition. A cloth-bound blue-black board, gilt stamping, ivory pages.
+ *
+ * The app has two natures and the design stops fighting that. Notation is a
+ * PAPER medium; the falling notes and the keyboard are an INSTRUMENT. So the
+ * score sits on ivory and the instrument is lacquered ink, joined by a shared
+ * type system and one rule about colour:
+ *
+ *   COLOUR MEANS SOMETHING — it is never decoration.
+ *     gold   the right hand
+ *     lapis  the left hand
+ *     jade   you (your own presses, and a correct hit)
+ *     "now"  is always the OPPOSITE medium: ivory on the dark instrument,
+ *            ink on the ivory page
+ *   Chrome — buttons, panels, rules — stays neutral so that holds.
+ *
+ * TYPE, three roles:
+ *   Newsreader      display serif; its italic does the job a score's expression
+ *                   marks do (piece titles, section heads, the running status)
+ *   IBM Plex Sans   interface: labels, buttons, controls
+ *   IBM Plex Mono   every MEASUREMENT — times, BPM, milliseconds, bar numbers,
+ *                   scores. Tabular by construction, so nothing jitters while
+ *                   the playhead moves, and readouts read as instrument data
+ *                   rather than as prose.
+ * All three degrade to the system stack offline.
+ * ========================================================================== */
+
+:root {
+  /* --- ground: cloth board --- */
+  --ink:        #0e1420;
+  --ink-raise:  #151d2c;
+  --ink-sunk:   #0b1018;
+  --well:       #080c14;   /* the instrument well — deepest surface */
+  --rule:       #222d42;
+  --rule-soft:  #1a2333;
+
+  /* --- pages --- */
+  --ivory:      #f1ece2;
+  --ivory-warm: #e9e2d4;
+  --page-ink:   #171d29;
+  --page-rule:  #cdc3b0;
+
+  /* --- text on ink --- */
+  --fg:         #eae6dd;
+  --fg-dim:     #9aa4b5;
+  --fg-faint:   #828da1;   /* 5.0:1 on the panel — the small uppercase labels
+                              are set in this, and #6b7688 measured only 3.7 */
+
+  /* --- meaning --- */
+  --gold:       #e2b15c;   /* right hand */
+  --gold-hi:    #f4cf8d;
+  --gold-deep:  #8d6a2c;
+  --lapis:      #6c9be8;   /* left hand */
+  --lapis-hi:   #a3c4f5;
+  --lapis-deep: #2f5490;
+  --jade:       #59c2a0;   /* you */
+  --jade-hi:    #8fdcc2;
+
+  /* --- state --- */
+  --ok:         #59c2a0;
+  --warn:       #d9a441;
+  --err:        #d2604f;
+
+  /* --- form --- */
+  /* The instrument's two halves are sized from these, and its own minimum is
+     computed from them. When they were set independently the sum exceeded the
+     panel's min-height and `overflow:hidden` quietly CLIPPED THE BOTTOM OF THE
+     KEYS — which is why the note names only appeared once another panel was
+     switched off and the keyboard finally had room. */
+  --kb-h: 138px;
+  --roll-min: 150px;
+
+  --r-lg: 16px;  --r-md: 11px;  --r-sm: 8px;  --r-pill: 999px;
+  --lift-1: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 2px rgba(0,0,0,.4);
+  --lift-2: 0 1px 0 rgba(255,255,255,.05) inset, 0 12px 34px -14px rgba(0,0,0,.8);
+  --lift-3: 0 1px 0 rgba(255,255,255,.06) inset, 0 28px 60px -22px rgba(0,0,0,.9);
+  --ease: cubic-bezier(.2,.7,.3,1);
+
+  --display: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+  --ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--lapis-hi);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+input[type="range"]:focus-visible { outline: none; }
+input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(163,196,245,.35); }
+input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px rgba(163,196,245,.35); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+  .paper__scroll { scroll-behavior: auto; }
+}
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(1100px 620px at 82% -12%, #1a2540 0%, rgba(0,0,0,0) 62%),
+    radial-gradient(900px 540px at 6% 108%, #101a2b 0%, rgba(0,0,0,0) 58%),
+    var(--ink);
+  color: var(--fg);
+  font-family: var(--ui);
+  font-size: 15px;
+  font-feature-settings: "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+/* the radial above uses a literal so it degrades gracefully if unsupported */
+html, body { background-color: var(--ink); }
+
+.app {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 20px clamp(14px, 3.2vw, 34px) 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* THE WORKSPACE fills the window and the three views SHARE what's left after
+   the chrome, instead of each having a fixed height and pushing the keyboard
+   below the fold. The whole premise is following the music three ways at once,
+   so on any normal screen you never scroll during practice: the score and the
+   instrument shrink together and keep their proportions. The reference panels
+   (practice log, device & sound) sit deliberately BELOW this fold — they are
+   things you read between sessions, not while playing. */
+.workspace {
+  min-height: calc(100vh - 50px);
+  min-height: calc(100svh - 50px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ============================================================ masthead ==== */
+/* One row: brand, the piece and its status, actions. The piece title used to
+   have a row of its own under the brand; folding it in returns ~35px to the
+   panels, which is where the eye should be. */
+.masthead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 18px 26px; flex-wrap: wrap; flex: none;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.brand { display: flex; align-items: center; gap: 15px; min-width: 0; }
+
+/* the mark: a gilt-stamped spine end — three keys cut into a board */
+.brand__mark {
+  width: 40px; height: 40px; flex: none; border-radius: 7px;
+  background: linear-gradient(158deg, #1d2740, #0c1220 62%);
+  border: 1px solid var(--rule);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 6px 18px -8px rgba(0,0,0,.9);
+  position: relative; overflow: hidden;
+}
+.brand__mark::before {
+  content: ""; position: absolute; inset: 9px 8px 10px;
+  background:
+    linear-gradient(90deg, var(--gold-hi) 0 3px, transparent 3px 7px,
+                           var(--gold) 7px 10px, transparent 10px 14px,
+                           var(--lapis) 14px 17px, transparent 17px);
+  opacity: .92;
+}
+.brand__mark::after {
+  content: ""; position: absolute; left: 8px; right: 8px; bottom: 7px; height: 1px;
+  background: var(--gold-deep); opacity: .8;
+}
+.is-playing .brand__mark::before { animation: breathe 2.6s var(--ease) infinite; }
+@keyframes breathe { 0%,100% { opacity: .92; } 50% { opacity: .55; } }
+
+.brand h1 {
+  font-family: var(--display);
+  font-weight: 500; font-size: 25px; letter-spacing: -.012em;
+  margin: 0; line-height: 1.05; color: var(--fg);
+}
+.brand__sub {
+  margin: 3px 0 0;
+  font-family: var(--display); font-style: italic; font-weight: 400;
+  color: var(--fg-faint); font-size: 13.5px; letter-spacing: .005em;
+}
+
+.loaders { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* ============================================================ controls ==== */
+.btn {
+  font-family: var(--ui); font-weight: 500; font-size: 13px; color: var(--fg);
+  background: linear-gradient(180deg, #1a2333, #131b28);
+  border: 1px solid var(--rule); padding: 9px 14px; border-radius: var(--r-md);
+  cursor: pointer; white-space: nowrap;
+  transition: border-color .16s var(--ease), background .16s var(--ease),
+              transform .06s var(--ease), color .16s var(--ease);
+}
+.btn:hover:not(:disabled) { border-color: #33405c; background: linear-gradient(180deg,#1f2937,#161f2e); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .38; cursor: default; }
+.btn--file {
+  background: linear-gradient(180deg, var(--ivory), var(--ivory-warm));
+  color: #131a26; border-color: transparent; font-weight: 600;
+  box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 8px 20px -12px rgba(241,236,226,.7);
+}
+.btn--file:hover { background: linear-gradient(180deg, #fff, var(--ivory)); }
+.btn--ghost { background: transparent; }
+.btn--ghost:hover:not(:disabled) { background: rgba(255,255,255,.035); }
+.btn--sm { padding: 6px 10px; font-size: 12px; border-radius: var(--r-sm); }
+.btn.is-on {
+  background: linear-gradient(180deg, #24344f, #1a2740);
+  border-color: var(--lapis-deep); color: var(--lapis-hi);
+}
+
+/* A <select>'s open list is drawn by the OS, not by the page, and it inherits
+   only the colour — so ours came up as light grey text on the system's white
+   popup. `color-scheme: dark` asks the browser for its dark popup, and the
+   <option> rules cover engines that honour those instead. */
+.select, select {
+  color-scheme: dark;
+  font-family: var(--ui); font-size: 12.5px; color: var(--fg);
+  background: linear-gradient(180deg,#1a2333,#131b28);
+  border: 1px solid var(--rule); border-radius: var(--r-md);
+  padding: 8px 9px; max-width: 220px;
+  transition: border-color .16s var(--ease);
+}
+select option, select optgroup {
+  background-color: var(--ink-raise); color: var(--fg);
+  font-family: var(--ui);
+}
+select option:checked, select option:hover { background-color: #26334b; color: var(--fg); }
+select option:disabled { color: var(--fg-faint); }
+.select:hover { border-color: #33405c; }
+.select--inline { max-width: 106px; padding: 5px 7px; font-size: 12px; border-radius: var(--r-sm); }
+
+/* --- segmented control: one job, one strip. Replaces a wall of identical
+       chips, so Mode and Hand read as single decisions. --- */
+.seg {
+  display: inline-flex; padding: 3px; gap: 2px;
+  background: var(--ink-sunk); border: 1px solid var(--rule-soft);
+  border-radius: var(--r-md);
+}
+.seg__opt { position: relative; }
+.seg__opt input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.seg__opt span {
+  display: block; padding: 5px 11px; border-radius: var(--r-sm);
+  font-size: 12.5px; font-weight: 500; color: var(--fg-dim);
+  cursor: pointer; user-select: none; white-space: nowrap;
+  transition: background .18s var(--ease), color .18s var(--ease);
+}
+.seg__opt:hover span { color: var(--fg); }
+.seg__opt input:checked + span {
+  background: linear-gradient(180deg, #26334b, #1c2739);
+  color: var(--fg);
+  box-shadow: 0 1px 0 rgba(255,255,255,.07) inset, 0 2px 8px -3px rgba(0,0,0,.7);
+}
+.seg__opt input:focus-visible + span { outline: 2px solid var(--lapis-hi); outline-offset: 2px; }
+
+/* --- toggle pill (checkboxes) --- */
+.chip {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--fg-dim);
+  background: transparent; border: 1px solid var(--rule-soft);
+  border-radius: var(--r-pill); padding: 5px 10px; cursor: pointer;
+  user-select: none; white-space: nowrap;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease);
+}
+.chip::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--rule); flex: none;
+  transition: background .16s var(--ease), box-shadow .16s var(--ease);
+}
+.chip:hover { color: var(--fg); border-color: #2c3850; }
+.chip input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.chip:has(input:checked) { color: var(--fg); border-color: #34435f; background: rgba(108,155,232,.07); }
+.chip:has(input:checked)::before { background: var(--jade); box-shadow: 0 0 8px rgba(89,194,160,.7); }
+.chip:has(input:focus-visible) { outline: 2px solid var(--lapis-hi); outline-offset: 2px; }
+
+.key {
+  font-family: var(--data); font-size: 10px; font-weight: 500;
+  color: var(--fg-faint); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 1px 5px; margin-left: 3px;
+  background: var(--ink-sunk);
+}
+
+/* ============================================================ now playing = */
+.nowplaying {
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  flex: 1 1 320px; padding-left: 22px; border-left: 1px solid var(--rule-soft);
+}
+.nowplaying__title { display: flex; align-items: baseline; gap: 12px; min-width: 0; flex-wrap: wrap; }
+.nowplaying__name {
+  font-family: var(--display); font-weight: 500; font-size: 22px;
+  letter-spacing: -.016em; line-height: 1.1; color: var(--fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.nowplaying__tempo {
+  font-family: var(--data); font-size: 12px; font-weight: 400;
+  color: var(--fg-faint); letter-spacing: .04em;
+  padding: 3px 9px; border: 1px solid var(--rule-soft); border-radius: var(--r-pill);
+}
+.status {
+  margin: 0; color: var(--fg-dim); font-size: 12.5px;
+  font-family: var(--display); font-style: italic;
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.status:not(:empty)::before {
+  content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor; opacity: .7; margin-right: 8px; vertical-align: 2px;
+}
+.status--ok { color: var(--ok); } .status--warn { color: var(--warn); } .status--err { color: var(--err); }
+
+/* ============================================================ toolbar ===== */
+.rail {
+  display: flex; flex-wrap: wrap; align-items: flex-start;
+  gap: 8px 12px; flex: none;
+  border: 1px solid var(--rule-soft); background: linear-gradient(180deg, var(--ink-raise), #121926);
+  border-radius: var(--r-lg); padding: 8px 12px;
+  box-shadow: var(--lift-1);
+}
+/* The group label sits INLINE with its controls rather than stacked above
+   them. Same information, roughly 40px less height per row — which goes
+   straight to the three panels below. */
+.rail__group { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+.rail__group + .rail__group { border-left: 1px solid var(--rule-soft); padding-left: 12px; }
+.rail__controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rail__label {
+  font-family: var(--ui); font-size: 9.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--fg-faint);
+  white-space: nowrap;
+}
+.rail__readout {
+  font-family: var(--data); font-size: 12px; color: var(--fg-dim);
+  letter-spacing: .01em; padding-left: 2px;
+}
+
+/* ============================================================ stage ======= */
+.stage {
+  display: flex; flex-direction: column; gap: 14px;
+  flex: 1 1 auto; min-height: 0;
+}
+
+/* --- the page --- */
+/* One grand-staff system measures 159-174px in these samples; with the panel's
+   own padding the score needs ~215px before the LEFT-HAND staff is visible at
+   all. It used to bottom out at 150px, which showed the treble stave and cut
+   the bass one off entirely. It now takes the larger share of the stage. */
+.paper {
+  position: relative;
+  flex: 5 1 0; min-height: 250px;           /* 5 : 6 — the falling notes get the larger share */
+  padding: 0 clamp(12px, 2.6vw, 30px);
+  background:
+    linear-gradient(180deg, #f6f2ea 0%, var(--ivory) 30%, var(--ivory-warm) 100%);
+  border-radius: var(--r-lg); overflow: hidden;
+  border: 1px solid #0a0f18;
+  box-shadow: var(--lift-3), 0 0 0 1px rgba(241,236,226,.06);
+}
+/* a gilt hairline along the top edge — the stamped rule of an edition page */
+.paper::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 2px; z-index: 2;
+  background: linear-gradient(90deg, transparent, var(--gold-deep) 12%, var(--gold) 50%, var(--gold-deep) 88%, transparent);
+  opacity: .55;
+}
+/* CURSOR CALIBRATION — do not put horizontal padding on this element, and do
+   not let CSS scale the SVG.
+   OSMD lays the score out to the container's clientWidth, which INCLUDES
+   padding, so 36px of side padding made it engrave 1290px of music into a
+   1218px box. `max-width:100%` then shrank the SVG by 0.944 — but the cursor
+   is an absolutely positioned <img> OUTSIDE the SVG, so it was not shrunk with
+   it. The result was a cursor that drifted right by +11px at the first note and
+   +70px by the end of a system.
+   The side inset now lives on .paper instead, and the score scrolls
+   horizontally rather than being scaled, so cursor pixels and engraving pixels
+   are always the same pixels. */
+.paper__scroll {
+  height: 100%; overflow-y: auto; overflow-x: auto; scroll-behavior: smooth;
+  padding: 14px 0 12px; color: var(--page-ink);
+  /* No scrollbar furniture on the page. The cursor scrolls the score for you
+     during playback and the wheel still works, so the bars were permanent
+     clutter on a surface that is meant to read like paper. */
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.paper__scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.paper__scroll svg { display: block; margin: 0 auto; max-width: none; }
+
+/* --- the instrument: roll + keyboard as ONE object, no seam between them.
+       Notes fall past the hit line and into the keys they belong to. --- */
+.instrument {
+  border: 1px solid var(--rule); border-radius: var(--r-lg); overflow: hidden;
+  background: var(--well); box-shadow: var(--lift-3);
+  display: flex; flex-direction: column;
+  /* +2px for the keyboard's top hairline and sub-pixel rounding: if this ever
+     comes out smaller than its two children, overflow:hidden eats the bottom
+     of the keys again. */
+  flex: 6 1 0; min-height: calc(var(--kb-h) + var(--roll-min) + 2px);
+}
+.rollwrap { position: relative; background: var(--well); flex: 1 1 auto; min-height: var(--roll-min); }
+.roll { display: block; width: 100%; height: 100%; }
+.kbwrap {
+  position: relative; background: var(--well); flex: none;
+  border-top: 1px solid rgba(241,236,226,.16);
+  box-shadow: 0 -14px 26px -18px rgba(0,0,0,.95) inset;
+}
+.keyboard { display: block; width: 100%; height: var(--kb-h); }
+/* the felt strip: what the notes pass through on their way into the keys */
+.kbwrap::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 5px; z-index: 3;
+  background: linear-gradient(180deg, rgba(8,12,20,.85), rgba(8,12,20,0));
+  pointer-events: none;
+}
+
+.is-hidden { display: none !important; }
+
+/* --- empty / no-notation states --- */
+.nosheet, .firstrun {
+  display: grid; place-items: center; border-radius: var(--r-lg);
+  border: 1px dashed var(--rule); background: var(--ink-raise);
+  min-height: 140px; padding: 26px;
+}
+.nosheet { background: repeating-linear-gradient(135deg, var(--ink-raise) 0 16px, #121a27 16px 32px); }
+.nosheet__inner, .firstrun__inner { text-align: center; max-width: 540px; }
+.nosheet__inner h2, .firstrun__inner h2 {
+  font-family: var(--display); font-weight: 500; font-size: 21px;
+  margin: 0 0 9px; color: var(--fg); letter-spacing: -.01em;
+}
+.nosheet__inner p, .firstrun__inner p { margin: 0; color: var(--fg-dim); line-height: 1.6; font-size: 13.5px; }
+.nosheet__actions { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+
+/* ============================================================ keys (SVG) == */
+.pk { cursor: pointer; transition: fill .09s linear; }
+.pk--white { fill: #efe9dd; stroke: #b3a996; stroke-width: .6; }
+.pk--black { fill: #10141d; stroke: #05070b; stroke-width: .5; }
+.pk--white.is-playR { fill: var(--gold-hi); }
+.pk--black.is-playR { fill: var(--gold); }
+.pk--white.is-playL { fill: var(--lapis-hi); }
+.pk--black.is-playL { fill: var(--lapis); }
+.pk--white.is-user  { fill: var(--jade-hi); }
+.pk--black.is-user  { fill: var(--jade); }
+.pk.is-expected { stroke: var(--ivory); stroke-width: 2.4; stroke-dasharray: 3 2.5; }
+.pk.is-correct { fill: var(--jade) !important; }
+.pk.is-wrong   { fill: var(--err) !important; }
+.pk-label { font: 500 9.5px var(--data); fill: #7d7566; text-anchor: middle; pointer-events: none; }
+.pk-label--c { fill: #5d5340; font-weight: 600; }
+.pk-typing { fill: var(--jade); opacity: .8; pointer-events: none; }
+.pk-badge { fill: var(--ivory); stroke: #0b1018; stroke-width: 1.2; pointer-events: none; }
+.pk-badge__text { font: 600 11px var(--data); fill: #10141d; text-anchor: middle; pointer-events: none; }
+
+/* ============================================================ readout ===== */
+.score {
+  display: flex; flex-wrap: wrap; gap: 0; flex: none;
+  border: 1px solid var(--rule-soft);
+  background: linear-gradient(180deg, var(--ink-raise), #121926);
+  border-radius: var(--r-lg); padding: 4px; box-shadow: var(--lift-1);
+}
+.score__cell {
+  display: flex; flex-direction: column; gap: 3px;
+  min-width: 92px; padding: 10px 16px; flex: 1 1 auto;
+}
+.score__cell + .score__cell { box-shadow: -1px 0 0 var(--rule-soft); }
+.score__cell span {
+  font-size: 9.5px; font-weight: 600; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--fg-faint);
+}
+.score__cell b {
+  font-family: var(--data); font-size: 17px; font-weight: 500;
+  color: var(--fg); font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.score__cell--wide { min-width: 176px; flex: 2 1 auto; }
+.score__cell--wide b { font-size: 14px; }
+
+/* ============================================================ transport === */
+.transport {
+  position: sticky; bottom: 12px; z-index: 30;
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; gap: clamp(14px, 2.6vw, 30px);
+  padding: 10px clamp(12px, 2vw, 20px);
+  background: rgba(17, 24, 36, .82);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-2), 0 -10px 34px -20px rgba(0,0,0,.9);
+}
+.transport__buttons { display: flex; gap: 8px; align-items: center; }
+.tbtn {
+  width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid var(--rule); background: linear-gradient(180deg,#1c2536,#141c29);
+  cursor: pointer;
+  transition: border-color .16s var(--ease), background .16s var(--ease), transform .06s var(--ease);
+}
+.tbtn:hover:not(:disabled) { border-color: #36435f; background: linear-gradient(180deg,#222c40,#18202f); }
+.tbtn:active:not(:disabled) { transform: translateY(1px); }
+.tbtn:disabled { opacity: .35; cursor: default; }
+.tbtn--play {
+  width: 46px; height: 46px; border-color: transparent;
+  background: linear-gradient(180deg, var(--ivory), var(--ivory-warm));
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 10px 26px -14px rgba(241,236,226,.85);
+}
+.tbtn--play:hover:not(:disabled) { background: linear-gradient(180deg,#fff,var(--ivory)); }
+.ico { display: block; }
+.ico--play { width: 0; height: 0; border-left: 14px solid #121926; border-top: 9px solid transparent; border-bottom: 9px solid transparent; margin-left: 4px; }
+.ico--pause { width: 13px; height: 15px; border-left: 4.5px solid var(--fg); border-right: 4.5px solid var(--fg); }
+.ico--stop { width: 12px; height: 12px; background: var(--fg); border-radius: 2px; }
+
+.transport__scrub { display: flex; align-items: center; gap: 13px; }
+.time {
+  font-family: var(--data); font-variant-numeric: tabular-nums;
+  font-size: 12.5px; color: var(--fg-dim); min-width: 42px; letter-spacing: .01em;
+}
+.time--total { text-align: right; color: var(--fg-faint); }
+.transport__knobs { display: flex; gap: 15px; flex-wrap: wrap; }
+.knob { display: flex; flex-direction: column; gap: 4px; }
+.knob__label {
+  font-size: 9.5px; font-weight: 600; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--fg-faint);
+}
+.knob__label em { font-family: var(--data); color: var(--fg-dim); font-style: normal; letter-spacing: 0; }
+.knob input[type="range"] { width: 92px; }
+
+/* SLIDERS. The browser hit-tests a range input by its BOX, not by the thumb
+   you see — and the box used to be the 4-8px track, so a finger had to land
+   within a few pixels to catch it (below WCAG's 24px floor even with a mouse).
+   The box is now a tall, transparent hit area; the thin track and the thumb
+   are drawn inside it and look exactly as before. */
+input[type="range"] {
+  -webkit-appearance: none; appearance: none; background: transparent;
+  height: 24px; margin: 0; padding: 0; outline: none; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: var(--r-pill); background: var(--rule); }
+input[type="range"]::-moz-range-track { height: 4px; border-radius: var(--r-pill); background: var(--rule); }
+/* input[type=range].scrubber, not just .scrubber: a bare class loses to
+   input[type="range"] on specificity (0,1,0 < 0,1,1), which is why the played
+   portion of the position bar never actually filled in. */
+input[type="range"].scrubber { flex: 1; }
+input[type="range"].scrubber::-webkit-slider-runnable-track {
+  height: 5px;
+  background: linear-gradient(90deg, var(--ivory) calc(var(--p,0)*1%), var(--rule) calc(var(--p,0)*1%));
+}
+input[type="range"].scrubber::-moz-range-track { height: 5px; }
+input[type="range"].scrubber::-moz-range-progress { height: 5px; border-radius: var(--r-pill); background: var(--ivory); }
+input[type="range"]:disabled { opacity: .4; cursor: default; }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -5px;
+  border-radius: 50%; background: var(--ivory); border: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,.6);
+  transition: transform .14s var(--ease);
+}
+input[type="range"].scrubber::-webkit-slider-thumb { margin-top: -4.5px; }
+input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.18); }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--ivory); border: none; }
+
+/* ============================================================ panels ====== */
+.settings {
+  border: 1px solid var(--rule-soft); background: var(--ink-raise);
+  border-radius: var(--r-lg); padding: 13px 18px;
+}
+.settings__summary {
+  font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--fg-faint); cursor: pointer; user-select: none;
+  transition: color .16s var(--ease);
+}
+.settings__summary::marker { color: var(--lapis-deep); }
+.settings__summary:hover { color: var(--fg-dim); }
+.settings__body { display: flex; flex-wrap: wrap; gap: 12px 26px; align-items: center; margin-top: 15px; }
+.settings__body--stack { flex-direction: column; align-items: stretch; gap: 16px; }
+.settings__group { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.settings__group + .settings__group { border-left: 1px solid var(--rule-soft); padding-left: 22px; }
+.settings .btn.is-on { background: linear-gradient(180deg,#1e3b34,#16302a); border-color: #2c6455; color: var(--jade-hi); }
+
+/* ============================================================ log ========= */
+.summary__hint {
+  font-family: var(--data); color: var(--jade); font-size: 10px;
+  letter-spacing: .06em; margin-left: 10px; text-transform: none;
+}
+.log__stats { display: flex; flex-wrap: wrap; gap: 12px 26px; align-items: flex-start; }
+.log__stat { display: flex; flex-direction: column; gap: 3px; min-width: 96px; }
+.log__stat span { font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--fg-faint); }
+.log__stat b { font-family: var(--data); font-size: 17px; font-weight: 500; color: var(--fg); font-variant-numeric: tabular-nums; }
+.log__stat--note {
+  flex: 1 1 260px; min-width: 210px; color: var(--fg-dim);
+  font-family: var(--display); font-style: italic; font-size: 13px; line-height: 1.55; align-self: center;
+}
+.log__chart {
+  display: flex; align-items: flex-end; gap: 5px; height: 76px;
+  padding: 9px 11px; border: 1px solid var(--rule-soft); border-radius: var(--r-md);
+  background: var(--ink-sunk);
+}
+.log__bar {
+  flex: 1 1 0; min-width: 6px; height: 100%; border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(180deg, var(--jade-hi), #2c7a63);
+  transform-origin: bottom; transform: scaleY(var(--h,0));
+  transition: transform .45s var(--ease);
+}
+.log__bar--empty { background: var(--rule-soft); transform: scaleY(.04); }
+.log__trend { display: flex; align-items: flex-end; gap: 4px; min-height: 26px; flex-wrap: wrap; }
+.log__trend i { display: block; width: 12px; height: 24px; border-radius: 2px; background: var(--rule-soft); position: relative; }
+.log__trend i::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--v,0%); border-radius: 2px; background: var(--lapis); }
+.log__trendlabel {
+  font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--fg-faint); margin: 0 8px; align-self: center;
+}
+
+/* ============================================================ dialog ====== */
+.sheetdlg {
+  border: 1px solid var(--rule); border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--ink-raise), #111825);
+  color: var(--fg); padding: 24px 26px; max-width: 480px; width: calc(100vw - 32px);
+  box-shadow: var(--lift-3); font-family: var(--ui);
+}
+.sheetdlg::backdrop { background: rgba(5,8,14,.7); backdrop-filter: blur(4px); }
+.sheetdlg__head { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.sheetdlg__head h2 { font-family: var(--display); font-weight: 500; font-size: 21px; margin: 0; letter-spacing: -.015em; }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 10px 18px; margin: 0; align-items: baseline; }
+.keys dt { text-align: right; white-space: nowrap; }
+.keys dd { margin: 0; color: var(--fg-dim); font-size: 13px; }
+.keys__note {
+  margin: 18px 0 0; color: var(--fg-faint); font-size: 12.5px; line-height: 1.9;
+  padding-top: 16px; border-top: 1px solid var(--rule-soft);
+}
+
+/* ============================================================ responsive == */
+/* SHORT WINDOWS (most laptops at 768-900px tall). The score is the panel that
+   stops being usable first — half a grand staff is worth nothing — so the
+   instrument gives up height instead, and the chrome tightens. */
+@media (max-height: 900px) {
+  :root { --kb-h: 118px; --roll-min: 124px; }
+  .app { padding-top: 14px; padding-bottom: 18px; gap: 11px; }
+  .workspace { min-height: calc(100vh - 32px); min-height: calc(100svh - 32px); gap: 11px; }
+  .stage { gap: 11px; }
+  .masthead { padding-bottom: 8px; }
+  .brand h1 { font-size: 19px; }
+  .brand__sub { display: none; }
+  .brand__mark { width: 30px; height: 30px; }
+  .nowplaying__name { font-size: 20px; }
+  .paper { min-height: 226px; }
+  .transport { padding: 8px clamp(10px, 2vw, 18px); }
+  .tbtn { width: 34px; height: 34px; }
+  .tbtn--play { width: 40px; height: 40px; }
+  .knob input[type="range"] { width: 88px; }
+}
+@media (max-height: 780px) {
+  :root { --kb-h: 100px; --roll-min: 100px; }
+  .paper { min-height: 200px; }
+}
+
+/* Below this width the six control groups wrap to three rows and cost the
+   music ~120px of height. One swipeable row instead — everything stays
+   reachable, nothing is hidden, and the fade on the right edge says so. */
+@media (max-width: 1320px) {
+  .rail {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+    gap: 0; padding: 12px 0;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 30px), transparent 100%);
+            mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 30px), transparent 100%);
+  }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail__group { flex: none; padding: 0 16px; scroll-snap-align: start; }
+  .rail__group + .rail__group { border-left: 1px solid var(--rule-soft); padding-left: 16px; }
+  .rail__controls { flex-wrap: nowrap; }
+}
+
+@media (max-width: 900px) {
+  .nowplaying { flex-basis: 100%; padding-left: 0; border-left: none; }
+  .status { white-space: normal; }
+}
+@media (max-width: 760px) {
+  :root { --kb-h: 96px; --roll-min: 104px; }
+  .app { padding: 14px 12px 40px; gap: 11px; }
+
+  /* the transport's knobs get the same swipe treatment */
+  .transport__knobs {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    padding-bottom: 2px; justify-content: flex-start;
+  }
+  .transport__knobs::-webkit-scrollbar { display: none; }
+  .knob { flex: none; }
+  .nowplaying__name { font-size: 19px; }
+  .transport { grid-template-columns: 1fr; gap: 12px; }
+  .transport__buttons { justify-content: center; }
+  .knob input[type="range"] { width: 86px; }
+  .paper { min-height: 186px; }
+  .score__cell + .score__cell { box-shadow: none; }
+  .log__stat--note { flex-basis: 100%; }
+  .settings__group + .settings__group { border-left: none; padding-left: 0; }
+}
+
+/* ---- score overlay: noteheads coloured by how you played them ---- */
+.paper__scroll svg g.vf-stavenote.is-correct .vf-notehead path { filter: drop-shadow(0 0 1.5px rgba(89,194,160,.55)); }
+.paper__scroll svg g.vf-stavenote.is-wrong .vf-notehead path { filter: drop-shadow(0 0 1.5px rgba(210,96,79,.55)); }
+.paper__scroll svg g.vf-stavenote.is-held .vf-notehead path { filter: drop-shadow(0 0 1.5px rgba(217,164,65,.6)); }
+
+/* ---- typing-keyboard map in the shortcuts dialog ---- */
+.typemap { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule-soft); }
+.typemap__title {
+  margin: 0 0 12px; font-size: 9.5px; font-weight: 600; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--fg-faint);
+}
+.typemap__rows { display: flex; flex-direction: column; gap: 4px; }
+.typemap__row { display: grid; grid-template-columns: repeat(11, 1fr); gap: 4px; }
+.typemap__row b, .typemap__row i, .typemap__row span {
+  display: grid; place-items: center; height: 26px; border-radius: 5px;
+  font: 500 11px var(--data); font-style: normal;
+}
+.typemap__row--black b { background: #10141d; color: var(--ivory); border: 1px solid var(--rule); }
+.typemap__row--black i { background: transparent; color: var(--fg-faint); border: 1px dashed var(--rule-soft); opacity: .55; }
+.typemap__row--black { transform: translateX(4.5%); }
+.typemap__row--white b { background: var(--ivory); color: #171d29; font-weight: 600; }
+.typemap__row--note span { height: 16px; color: var(--fg-faint); font-size: 10px; }
+.typemap__note { margin-top: 14px; padding-top: 0; border-top: none; }
+
+/* ============================================================ settings ==== */
+.sheetdlg--wide { max-width: 640px; max-height: calc(100vh - 40px); overflow-y: auto; }
+.setgroup { padding: 16px 0 4px; border-top: 1px solid var(--rule-soft); }
+.setgroup:first-of-type { border-top: none; padding-top: 4px; }
+.setgroup__title {
+  margin: 0 0 3px; font-family: var(--ui); font-size: 9.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--fg-faint);
+}
+.setgroup__hint {
+  margin: 0 0 10px; font-family: var(--display); font-style: italic;
+  font-size: 12.5px; color: var(--fg-dim);
+}
+.setgroup__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.setgroup__note {
+  margin: 4px 0 6px; font-size: 12px; line-height: 1.55; color: var(--fg-dim);
+}
+.setgroup__note b { color: var(--fg); font-weight: 600; }
+.field { display: inline-flex; align-items: center; gap: 8px; }
+.field__label {
+  font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--fg-faint); white-space: nowrap;
+}
+.knob--inline { flex-direction: row; align-items: center; gap: 10px; }
+.knob--inline input[type="range"] { width: 150px; }
+
+/* the gear on the Settings button: a small toothed ring in CSS */
+.gear {
+  display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+  border: 2.5px dotted var(--fg-dim); vertical-align: -2px; margin-right: 2px;
+}
+.btn:hover .gear { border-color: var(--fg); }
+
+/* ============================================================ repeat ====== */
+.rail__group--repeat .rail__label { cursor: help; text-decoration: underline dotted var(--rule); text-underline-offset: 3px; }
+.range { display: inline-flex; align-items: center; gap: 5px; }
+.range__word, .range__dash { font-size: 12px; color: var(--fg-dim); }
+.num {
+  width: 46px; font-family: var(--data); font-size: 12.5px; color: var(--fg);
+  background: var(--ink-sunk); border: 1px solid var(--rule); border-radius: var(--r-sm);
+  padding: 5px 6px; text-align: center; -moz-appearance: textfield; appearance: textfield;
+  color-scheme: dark;
+}
+.num::-webkit-outer-spin-button, .num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.num:disabled { opacity: .4; }
+.num:focus-visible { outline: 2px solid var(--lapis-hi); outline-offset: 1px; }
+.rail__group--repeat.is-on .rail__readout { color: var(--jade); }
+.rail__group--tools { margin-left: auto; }
+
+/* the repeated stretch, drawn on the scrubber track */
+.scrub { position: relative; flex: 1; display: flex; align-items: center; }
+.scrub .scrubber { position: relative; z-index: 1; width: 100%; }
+.scrub__loop {
+  position: absolute; top: 50%; height: 11px; transform: translateY(-50%);
+  left: calc(var(--a, 0) * 1%); width: calc((var(--b, 0) - var(--a, 0)) * 1%);
+  background: rgba(89,194,160,.22); border: 1px solid rgba(89,194,160,.7);
+  border-radius: 4px; pointer-events: none; z-index: 0;
+}
+
+@media (max-width: 1320px) {
+  .rail__group--tools { margin-left: 0; }
+}
+
+/* ============================================================ touch ======= */
+/* Without these the browser keeps a finger for itself: sliding across the
+   on-screen keys scrolled the page instead of playing, and a held key could be
+   cancelled when the browser decided the touch was a pan. */
+.keyboard { touch-action: none; -webkit-user-select: none; user-select: none; }
+.roll { touch-action: none; }
+button, .chip, .seg__opt, select, .tbtn, input[type="range"] { touch-action: manipulation; }
+
+/* Coarse pointers (a finger): every control reaches 44px. That clears
+   Microsoft's own touch guidance for Windows (40x40 effective px, about 7.5 mm)
+   and WCAG 2.5.5's AAA level (44x44); the AA floor, 2.5.8, is 24x24. Apple asks
+   for 44pt and Material for 48dp. Mouse users keep the compact sizes. */
+@media (pointer: coarse) {
+  .btn, .btn--sm, .select, .num { min-height: 44px; }
+  .btn--sm { padding: 8px 14px; font-size: 13px; }
+  .chip { min-height: 44px; padding: 8px 14px; }
+  .seg__opt span { min-height: 44px; display: flex; align-items: center; padding: 6px 15px; }
+  .seg { padding: 0; }
+  .tbtn { width: 46px; height: 46px; }
+  .tbtn--play { width: 54px; height: 54px; }
+  input[type="range"] { height: 44px; }
+  /* One vendor per rule: a selector list containing a pseudo-element the
+     browser doesn't know (Chrome and ::-moz-*, Firefox and ::-webkit-*) makes
+     it drop the WHOLE rule — which is what silently undid these on touch. */
+  input[type="range"]::-webkit-slider-runnable-track { height: 8px; }
+  input[type="range"]::-moz-range-track { height: 8px; }
+  input[type="range"].scrubber::-webkit-slider-runnable-track { height: 8px; }
+  input[type="range"].scrubber::-moz-range-track { height: 8px; }
+  input[type="range"].scrubber::-moz-range-progress { height: 8px; }
+  input[type="range"]::-webkit-slider-thumb { width: 26px; height: 26px; margin-top: -9px; }
+  input[type="range"].scrubber::-webkit-slider-thumb { width: 26px; height: 26px; margin-top: -9px; }
+  input[type="range"]::-moz-range-thumb { width: 26px; height: 26px; }
+  .btn--round { min-width: 44px; }
+  .knob input[type="range"] { width: 110px; }
+}
+
+/* ============================================================ heads-up ==== */
+/* Practice feedback sits over the falling notes, where the eyes are while
+   playing — the status line at the top of the page is a glance away from the
+   keys, which during practice means it is effectively invisible. */
+.hud {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  z-index: 5; pointer-events: none; max-width: calc(100% - 24px);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 16px 9px; border-radius: 12px;
+  background: rgba(10, 14, 22, .82); border: 1px solid var(--rule);
+  box-shadow: 0 10px 28px -12px rgba(0,0,0,.9);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: opacity .18s var(--ease);
+}
+.hud__text {
+  font-family: var(--display); font-style: italic; font-size: 17px; color: var(--fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.hud--ok   { border-color: rgba(89,194,160,.55); }
+.hud--ok .hud__text { color: var(--jade-hi); }
+.hud--warn { border-color: rgba(217,164,65,.55); }
+.hud--warn .hud__text { color: var(--gold-hi); }
+.hud--err  { border-color: rgba(210,96,79,.6); }
+.hud--err .hud__text { color: #f0a497; }
+.hud__bar { width: 180px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.hud__bar i { display: block; height: 100%; width: 0; background: var(--jade); border-radius: 2px; }
+.hud__bar i.is-running { animation: hudfill var(--hold-ms, 700ms) linear forwards; }
+@keyframes hudfill { from { width: 0; } to { width: 100%; } }
+
+/* the held chord fills with green on the keys themselves */
+.pk.is-holding { animation: keyhold var(--hold-ms, 700ms) linear forwards; }
+@keyframes keyhold { from { fill: #efe9dd; } to { fill: var(--jade); } }
+.pk--black.is-holding { animation-name: keyholdb; }
+@keyframes keyholdb { from { fill: #10141d; } to { fill: var(--jade); } }
+
+/* ============================================================ finger pad == */
+.fingerpad { display: inline-flex; gap: 3px; }
+.fingerpad .btn { min-width: 30px; padding-left: 0; padding-right: 0; font-family: var(--data); }
+
+/* ============================================================ first run === */
+.firstrun__actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px; }
+.firstrun__actions i { font-family: var(--display); }
+
+/* ============================================================ calibration = */
+.calib { display: flex; align-items: center; gap: 14px; margin: 4px 0 10px; }
+.calib__text { margin: 0; flex: 1; font-size: 12.5px; color: var(--fg-dim); }
+.calib__pad {
+  width: 96px; height: 64px; border-radius: 12px; font: 600 14px var(--ui);
+  color: var(--ink); background: linear-gradient(180deg, var(--ivory), var(--ivory-warm));
+  border: none; cursor: pointer; touch-action: manipulation;
+}
+.calib__pad:active, .calib__pad.is-hit { background: var(--jade-hi); }
+
+/* ============================================================ drop zone === */
+.dropzone {
+  position: fixed; inset: 12px; z-index: 50; display: grid; place-items: center;
+  border: 2px dashed var(--jade); border-radius: 20px; background: rgba(8,12,20,.82);
+  pointer-events: none;
+}
+.dropzone span { font-family: var(--display); font-style: italic; font-size: 28px; color: var(--jade-hi); }
+
+/* ============================================================ keyboard chip */
+.midichip { position: relative; padding-left: 26px; }
+.midichip::before {
+  content: ""; position: absolute; left: 11px; top: 50%; width: 8px; height: 8px;
+  margin-top: -4px; border-radius: 50%; background: var(--fg-faint);
+}
+.midichip.is-on { border-color: rgba(89,194,160,.55); color: var(--jade-hi); }
+.midichip.is-on::before { background: var(--jade); box-shadow: 0 0 8px rgba(89,194,160,.8); }
+.midichip.is-warn { border-color: rgba(217,164,65,.55); color: var(--gold-hi); }
+.midichip.is-warn::before { background: var(--warn); }
+
+/* ============================================================ masthead ==== */
+.btn--round { min-width: 32px; padding-left: 0; padding-right: 0; font-family: var(--data); font-weight: 600; }
+#sampleList { max-width: 150px; }
+#pieceList { max-width: 170px; }
+
+/* ============================================================ wait mode ==== */
+/* Wait mode needs no transport: the first right note starts it, the keys to
+   press light up by themselves, and the next first note after the end starts
+   again. The bar's height goes to the three panels. */
+body.is-wait .transport { display: none; }
+.chip--metro { font-weight: 500; }
+
+/* ============================================================ MIDI parts === */
+.parts { display: grid; gap: 6px; width: 100%; margin: 4px 0 6px; }
+.part { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--rule-soft); border-radius: var(--r-sm); background: var(--ink-sunk); }
+.part__name { font-weight: 500; color: var(--fg); min-width: 110px; }
+.part__meta { flex: 1; color: var(--fg-dim); font-size: 12px; font-family: var(--data); }
+.part.is-off .part__name, .part.is-off .part__meta { opacity: .5; }
+
+/* ============================================================ messages ==== */
+/* The status line is announced to screen readers but takes no room on the
+   page; its text lives in the panel over the falling notes, which shows only
+   while the pointer is over them. An error (.is-alert) shows for a moment
+   anyway, because it needs you to do something. */
+.status {
+  position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.rollwrap .hud { opacity: 0; }
+.rollwrap:hover .hud:not(.is-empty), .rollwrap .hud.is-alert:not(.is-empty) { opacity: 1; }
+.hud.is-empty { display: none; }
+.nowplaying { justify-content: center; }

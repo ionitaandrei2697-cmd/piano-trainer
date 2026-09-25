@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Piano Trainer</title>
+  <meta name="theme-color" content="#0e1420" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+   <div class="workspace">
+
+    <!-- ============ masthead: brand · piece · status · actions, one row ============ -->
+    <header class="masthead">
+      <div class="brand">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <div class="brand__text">
+          <h1>Piano&nbsp;Trainer</h1>
+          <p class="brand__sub">learn by playing along</p>
+        </div>
+      </div>
+      <div class="nowplaying">
+        <div class="nowplaying__title">
+          <span class="nowplaying__name" id="title">No piece loaded</span>
+          <span class="nowplaying__tempo" id="tempoInfo">&mdash;</span>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite">Loading&hellip;</p>
+      </div>
+      <div class="loaders">
+        <button class="btn midichip" id="midiChip" type="button">Connect keyboard</button>
+        <label class="btn btn--file">
+          <input type="file" id="fileInput" accept=".xml,.musicxml,.mxl,.mid,.midi" hidden />
+          Open file&hellip;
+        </label>
+        <select id="sampleList" class="select" aria-label="Sample pieces"><option value="">Samples&hellip;</option></select>
+        <select id="pieceList" class="select" aria-label="Saved pieces"><option value="">Saved pieces&hellip;</option></select>
+        <button class="btn btn--ghost btn--sm btn--round" id="btnHelp" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" aria-haspopup="dialog">?</button>
+      </div>
+    </header>
+
+    <!-- ============ toolbar: what you touch WHILE playing ============ -->
+    <section class="rail" aria-label="Practice controls">
+      <div class="rail__group">
+        <span class="rail__label">Mode</span>
+        <div class="rail__controls">
+          <div class="seg" role="group" aria-label="Practice mode">
+            <label class="seg__opt" title="Listen: the app plays the piece (or only the selected hand); nothing is scored">
+              <input type="radio" name="mode" id="modeListen" checked /><span>Listen</span></label>
+            <label class="seg__opt" title="Follow: play along at tempo; each note is timed and scored. The app plays none of the notes you are learning.">
+              <input type="radio" name="mode" id="modeFollow" /><span>Follow</span></label>
+            <label class="seg__opt" title="Wait: play the lit key to start; the music waits at each note until you play it and hold it. No play bar needed.">
+              <input type="radio" name="mode" id="modeWait" /><span>Wait</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="rail__group">
+        <span class="rail__label">Hand</span>
+        <div class="rail__controls">
+          <div class="seg" role="group" aria-label="Practice hand">
+            <label class="seg__opt"><input type="radio" name="hand" id="handBoth" checked /><span>Both</span></label>
+            <label class="seg__opt"><input type="radio" name="hand" id="handRight" /><span>Right</span></label>
+            <label class="seg__opt"><input type="radio" name="hand" id="handLeft" /><span>Left</span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- repeat a passage: the thing the loop was always for -->
+      <div class="rail__group rail__group--repeat" title="Repeat a passage until it is clean. With Auto tempo on, each clean pass raises the tempo a step.">
+        <span class="rail__label">Repeat</span>
+        <div class="rail__controls">
+          <button class="btn btn--sm" id="btnLoopBar" title="Repeat the bar the playhead is in (B)" disabled>This&nbsp;bar</button>
+          <span class="range" title="Type a range of bars">
+            <input type="number" class="num" id="loopFrom" min="1" step="1" placeholder="bar" aria-label="Repeat from bar" disabled />
+            <span class="range__dash">&ndash;</span>
+            <input type="number" class="num" id="loopTo" min="1" step="1" placeholder="bar" aria-label="Repeat to bar" disabled />
+          </span>
+          <button class="btn btn--sm btn--ghost" id="btnLoopClear" title="Stop repeating (C)" disabled>Off</button>
+          <span class="rail__readout is-hidden" id="loopInfo">off</span>
+        </div>
+      </div>
+
+      <div class="rail__group">
+        <div class="rail__controls">
+          <label class="chip chip--metro" title="Metronome on / off (M). Sound, count-in, beats and subdivisions are in Settings."><input type="checkbox" id="toggleMetronome" /> Metronome</label>
+          <button class="btn btn--sm is-hidden" id="btnSkipCountIn" title="Skip the count-in and start the music now (Space)">Skip</button>
+        </div>
+      </div>
+
+      <div class="rail__group rail__group--tools">
+        <div class="rail__controls">
+          <button class="btn btn--sm is-hidden" id="btnDrill">Drill</button>
+          <button class="btn btn--sm" id="btnFingering" title="Then click a falling note and press 1–5" disabled>Fingering</button>
+          <span class="rail__readout is-hidden" id="fingerNote">&mdash;</span>
+          <!-- where a finger change applies: this one note, or every note of that pitch in that hand -->
+          <div class="seg is-hidden" id="fingerScope" role="group" aria-label="Apply the finger to">
+            <label class="seg__opt" title="Change only the note you picked">
+              <input type="radio" name="fingerScope" id="scopeNote" value="note" checked /><span>This note</span></label>
+            <label class="seg__opt" title="Change every note of this pitch in this hand, everywhere in the piece">
+              <input type="radio" name="fingerScope" id="scopePitch" value="pitch" /><span id="scopePitchLabel">Every one</span></label>
+          </div>
+          <span class="fingerpad is-hidden" id="fingerPad" role="group" aria-label="Finger number">
+            <button class="btn btn--sm" data-f="1">1</button><button class="btn btn--sm" data-f="2">2</button><button class="btn btn--sm" data-f="3">3</button><button class="btn btn--sm" data-f="4">4</button><button class="btn btn--sm" data-f="5">5</button><button class="btn btn--sm btn--ghost" data-f="0" title="Back to the automatic suggestion (0)">Auto</button>
+          </span>
+          <button class="btn btn--sm" id="btnSettings" title="Panels, overlays, coach and device settings" aria-haspopup="dialog">
+            <span class="gear" aria-hidden="true"></span> Settings
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ stage ============ -->
+    <main class="stage">
+      <div class="firstrun is-hidden" id="firstRun">
+        <div class="firstrun__inner">
+          <h2>Start with a piece</h2>
+          <p>Open a MusicXML or MIDI file (or drop one anywhere on this page), pick one from <b>Samples</b> &mdash; or start right here:</p>
+          <div class="firstrun__actions">
+            <button class="btn" id="btnQuickListen">Hear it &mdash; <i>Ode to Joy</i></button>
+            <button class="btn btn--file" id="btnQuickLearn">Learn it &mdash; right hand, the music waits for you</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- the page -->
+      <div class="paper" id="sheetPanel">
+        <div class="paper__scroll" id="sheetContainer"></div>
+      </div>
+
+      <div class="nosheet is-hidden" id="noSheet">
+        <div class="nosheet__inner">
+          <h2>No notation in this file</h2>
+          <p>MIDI carries no sheet music. You can <b>convert it into notation</b> below &mdash; it estimates the key, spells the notes, and lays them out on two staves &mdash; or play it as it is, with the falling notes, the keyboard, scoring and the practice modes.</p>
+          <div class="nosheet__actions">
+            <label class="chip">Quantize to
+              <select id="convertGrid" class="select select--inline" aria-label="Quantize grid">
+                <option value="4">1/4</option>
+                <option value="8">1/8</option>
+                <option value="16" selected>1/16</option>
+                <option value="32">1/32</option>
+              </select>
+            </label>
+            <button class="btn" id="btnConvertSheet">Convert to sheet music</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- the instrument: falling notes and keys are ONE object -->
+      <section class="instrument" aria-label="Falling notes and keyboard">
+        <div class="rollwrap" id="rollPanel">
+          <!-- heads-up: practice feedback where the eyes are, not at the top of the page -->
+          <div class="hud is-empty" id="hud" aria-hidden="true">
+            <span class="hud__text" id="hudText"></span>
+            <span class="hud__bar is-hidden" id="hudBarWrap"><i id="hudBar"></i></span>
+          </div>
+          <canvas id="rollCanvas" class="roll" role="img" aria-label="Falling notes. Click to seek, scroll to scrub, right-click to step back one chord."></canvas>
+        </div>
+        <div class="kbwrap" id="keyboardPanel">
+          <svg id="keyboardSvg" class="keyboard" preserveAspectRatio="none" role="img" aria-label="On-screen piano keyboard"></svg>
+        </div>
+      </section>
+    </main>
+
+    <!-- ============ readout ============ -->
+    <section class="score is-hidden" id="scorePanel">
+      <div class="score__cell"><span>Correct</span><b id="scoreCorrect">0</b></div>
+      <div class="score__cell"><span>Wrong</span><b id="scoreWrong">0</b></div>
+      <div class="score__cell"><span>Missed</span><b id="scoreMissed">0</b></div>
+      <div class="score__cell"><span>Accuracy</span><b id="scoreAcc">100%</b></div>
+      <div class="score__cell score__cell--wide" title="Average offset from the beat, and how much it varies. Ahead or behind is a tempo problem; a wide spread is a steadiness problem.">
+        <span>Timing</span><b id="scoreTiming">&mdash;</b>
+      </div>
+      <div class="score__cell score__cell--wide" title="How long you hold notes against how long they are written. Below 100% you are clipping them; above, you are running them together.">
+        <span>Note length</span><b id="scoreLength">&mdash;</b>
+      </div>
+      <div class="score__cell"><span>Streak</span><b id="scoreStreak">0 (best 0)</b></div>
+      <div class="score__cell"><span>Points</span><b id="scorePoints">0</b></div>
+      <div class="score__cell"><span>Best</span><b id="scoreBest">&mdash;</b></div>
+    </section>
+
+    <!-- ============ transport ============ -->
+    <footer class="transport">
+      <div class="transport__buttons">
+        <button class="tbtn tbtn--play" id="btnPlay" title="Play (Space)" aria-label="Play" aria-keyshortcuts="Space" disabled><span class="ico ico--play"></span></button>
+        <button class="tbtn is-hidden" id="btnPause" title="Pause (Space)" aria-label="Pause" aria-keyshortcuts="Space" disabled><span class="ico ico--pause"></span></button>
+        <button class="tbtn" id="btnStop" title="Stop" aria-label="Stop" disabled><span class="ico ico--stop"></span></button>
+      </div>
+      <div class="transport__scrub">
+        <span class="time" id="timeNow">0:00</span>
+        <span class="scrub">
+          <span class="scrub__loop is-hidden" id="scrubLoop" aria-hidden="true"></span>
+          <input type="range" id="scrubber" class="scrubber" min="0" max="1" step="0.001" value="0" aria-label="Playback position" disabled />
+        </span>
+        <span class="time time--total" id="timeTotal">0:00</span>
+      </div>
+      <div class="transport__knobs">
+        <label class="knob"><span class="knob__label">Tempo <em id="tempoVal">100%</em></span>
+          <input type="range" id="tempo" min="0.3" max="1.5" step="0.05" value="1" aria-label="Tempo" /></label>
+      </div>
+    </footer>
+
+   </div><!-- /.workspace -->
+
+    <!-- ============ practice log ============ -->
+    <details class="settings" id="logPanel">
+      <summary class="settings__summary">Practice log <span class="summary__hint" id="logHint"></span></summary>
+      <div class="settings__body settings__body--stack">
+        <div class="log__stats">
+          <div class="log__stat"><span>Today</span><b id="logToday">0 min</b></div>
+          <div class="log__stat"><span>Streak</span><b id="logStreak">0 days</b></div>
+          <div class="log__stat"><span>Last 14 days</span><b id="logTotal">0 min</b></div>
+          <div class="log__stat log__stat--note" id="logAdvice"></div>
+        </div>
+        <div class="log__chart" id="logChart" role="img" aria-label="Minutes practised per day over the last two weeks"></div>
+        <div class="log__trend" id="logTrend"></div>
+      </div>
+    </details>
+
+  </div>
+
+  <div class="dropzone is-hidden" id="dropZone" aria-hidden="true"><span>Drop to open</span></div>
+
+  <!-- ============ settings ============ -->
+  <dialog class="sheetdlg sheetdlg--wide" id="settingsDialog" aria-label="Settings">
+    <div class="sheetdlg__head">
+      <h2>Settings</h2>
+      <button class="btn btn--sm btn--ghost" id="btnSettingsClose">Close</button>
+    </div>
+
+    <section class="setgroup">
+      <h3 class="setgroup__title">This piece</h3>
+      <div class="setgroup__row">
+        <button class="btn btn--sm" id="btnExportMidi" disabled>Export as MIDI</button>
+        <button class="btn btn--sm btn--ghost" id="btnDeletePiece" title="Take the open piece off the Saved pieces list (with its best score and fingering edits)" disabled>Remove from saved pieces</button>
+        <button class="btn btn--sm btn--ghost" id="btnResetFingering" title="Forget every finger you changed in this piece and go back to the automatic suggestions" disabled>Reset fingering</button>
+      </div>
+      <!-- MIDI files only: which tracks you play, and fitting them to your keyboard -->
+      <div class="midiopts is-hidden" id="midiOpts">
+        <div class="setgroup__row">
+          <label class="chip" title="Move notes your keyboard doesn't have in by whole octaves"><input type="checkbox" id="toggleFitKeys" checked /> Fit to my keyboard</label>
+          <span class="rail__readout" id="fitNote"></span>
+        </div>
+        <div class="parts" id="midiParts" role="group" aria-label="MIDI tracks"></div>
+        <p class="setgroup__note"><b>Practice</b>: you play it. <b>Backing</b>: it plays with you, quieter and faint on
+          the falling notes, never asked of you. <b>Off</b>: left out. Drums start off &mdash; they aren't pitches.</p>
+      </div>
+    </section>
+
+    <section class="setgroup">
+      <h3 class="setgroup__title">Panels</h3>
+      <p class="setgroup__hint">The three ways of following the music.</p>
+      <div class="setgroup__row">
+        <label class="chip"><input type="checkbox" id="toggleSheet" checked /> Score</label>
+        <label class="chip"><input type="checkbox" id="toggleRoll" checked /> Falling notes</label>
+        <label class="chip"><input type="checkbox" id="toggleKeyboard" checked /> Keyboard</label>
+      </div>
+    </section>
+
+    <section class="setgroup">
+      <h3 class="setgroup__title">Show</h3>
+      <p class="setgroup__hint">Drawn on top of the panels.</p>
+      <div class="setgroup__row">
+        <label class="chip" title="Letter names on the piano keys"><input type="checkbox" id="toggleLabels" /> Note names</label>
+        <label class="chip" title="Barlines, bar numbers and beat lines on the falling notes"><input type="checkbox" id="toggleGrid" checked /> Beat grid</label>
+        <label class="chip" title="The bar that marks your place in the score"><input type="checkbox" id="toggleCursor" checked /> Cursor</label>
+        <label class="chip" title="Size the score so a whole system fits the panel"><input type="checkbox" id="toggleFit" checked /> Fit score</label>
+        <label class="chip" title="Colour the noteheads as you play: green played, red missed or wrong, amber right note but wrong length"><input type="checkbox" id="toggleColour" checked /> Colour notes as played</label>
+        <label class="chip" title="On the falling notes: an amber bar where the hand jumps to a new position, a thin arc where the thumb passes under"><input type="checkbox" id="toggleMoves" checked /> Hand moves</label>
+      </div>
+      <div class="setgroup__row">
+        <label class="knob knob--inline"><span class="knob__label">Zoom <em id="zoomVal">auto</em></span>
+          <input type="range" id="zoom" min="0.5" max="2" step="0.1" value="1" aria-label="Sheet zoom" /></label>
+        <label class="knob knob--inline"><span class="knob__label">Fall speed <em id="noteSpeedVal">130 px/s</em></span>
+          <input type="range" id="noteSpeed" min="60" max="320" step="10" value="130" aria-label="Falling-note speed" /></label>
+      </div>
+    </section>
+
+    <section class="setgroup">
+      <h3 class="setgroup__title">Coach</h3>
+      <p class="setgroup__hint">How strictly a note is judged, and what happens after a clean pass.</p>
+      <div class="setgroup__row">
+        <label class="field">
+          <span class="field__label">Timing window</span>
+          <select id="timingWindow" class="select select--inline" aria-label="Timing precision" title="How close to the beat a note must land to count (Follow mode)">
+            <option value="relaxed">&plusmn;500 ms</option>
+            <option value="normal" selected>&plusmn;350 ms</option>
+            <option value="strict">&plusmn;180 ms</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">Note length</span>
+          <select id="lengthMode" class="select select--inline" aria-label="How note length is judged">
+            <option value="strict" selected>Required</option>
+            <option value="report">Reported only</option>
+            <option value="off">Ignored</option>
+          </select>
+        </label>
+        <label class="chip" title="After a clean repeat pass, raise the tempo 5%; after a rough one, lower it"><input type="checkbox" id="toggleRamp" /> Auto tempo</label>
+        <label class="chip" title="When you practise one hand in Follow or Wait, the app plays the other hand along with you. Off: you hear only what you play."><input type="checkbox" id="toggleOtherHand" /> Play the other hand for me</label>
+      </div>
+      <p class="setgroup__note">
+        <b>Required</b> means a note is not correct until it has been held for its written length: in
+        Follow a clipped or overheld note comes off the accuracy; in Wait the playhead does not move on
+        until the chord has been held for most of its value, and letting go early means striking it again.
+      </p>
+    </section>
+
+    <section class="setgroup">
+      <h3 class="setgroup__title">Metronome</h3>
+      <p class="setgroup__hint">The Metronome button in the toolbar turns the click on and off; this is what it sounds like.</p>
+      <div class="setgroup__row">
+        <label class="field"><span class="field__label">Count-in</span>
+          <select id="countInMode" class="select select--inline" aria-label="Count-in before playing" title="One bar before the music starts, when you press Play">
+            <option value="off">Off</option>
+            <option value="voice" selected>Voice counts</option>
+            <option value="clicks">Clicks</option>
+          </select></label>
+        <label class="field"><span class="field__label">Sound</span>
+          <select id="metroSound" class="select select--inline" aria-label="Metronome sound">
+            <option value="classic">Classic</option>
+            <option value="woodblock">Wood block</option>
+            <option value="tick">Tick</option>
+            <option value="bell">Bell</option>
+            <option value="cowbell">Cowbell</option>
+            <option value="voice">Voice counts</option>
+          </select></label>
+        <label class="field"><span class="field__label">Voice</span>
+          <select id="metroLang" class="select select--inline" aria-label="Counting language">
+            <option value="en">English</option>
+            <option value="ro">Română</option>
+          </select></label>
+      </div>
+      <div class="setgroup__row">
+        <label class="field"><span class="field__label">Beats per bar</span>
+          <select id="metroMeter" class="select select--inline" aria-label="Beats per bar" title="Taken from the score unless you choose one">
+            <option value="auto">From the score</option>
+            <option value="2/4">2/4</option>
+            <option value="3/4">3/4</option>
+            <option value="4/4">4/4</option>
+            <option value="6/8">6/8</option>
+          </select></label>
+        <label class="field"><span class="field__label">Subdivide</span>
+          <select id="metroSub" class="select select--inline" aria-label="Subdivisions of each beat" title="Softer clicks between the beats">
+            <option value="1">No</option>
+            <option value="2">In 2 (eighths)</option>
+            <option value="3">In 3 (triplets)</option>
+            <option value="4">In 4 (sixteenths)</option>
+          </select></label>
+        <label class="knob knob--inline"><span class="knob__label">Volume</span>
+          <input type="range" id="clickVol" min="0" max="1" step="0.01" value="0.6" aria-label="Metronome volume" /></label>
+        <button class="btn btn--sm" id="btnMetroPreview" title="Hear one bar with these settings">Hear it</button>
+      </div>
+      <p class="setgroup__note"><b>Beats per bar</b> follows the score's time signature unless you pick one &mdash;
+        useful for a MIDI file that carries a wrong one. <b>Subdivide</b> adds softer clicks between the beats
+        (&ldquo;and&rdquo; / &ldquo;&#537;i&rdquo; when counting in 2), which is what makes a dotted rhythm or a
+        triplet easy to place.</p>
+    </section>
+
+    <section class="setgroup">
+      <h3 class="setgroup__title">Device &amp; sound</h3>
+      <div class="setgroup__row">
+        <label class="knob knob--inline"><span class="knob__label">Volume</span>
+          <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Music volume" /></label>
+      </div>
+      <div class="setgroup__row">
+        <span class="field__label">MIDI keyboard</span>
+        <button class="btn btn--sm" id="btnMidi">Connect</button>
+        <select id="midiDevices" class="select" aria-label="MIDI input device"><option value="all">All devices</option></select>
+        <span class="status" id="midiStatus" role="status" aria-live="polite"></span>
+      </div>
+      <div class="setgroup__row">
+        <span class="field__label">Hands-free</span>
+        <button class="btn btn--sm" id="btnLearnPlay" title="Press, then press the key on your MIDI keyboard that should start and pause">Play/pause key: <b id="ctlPlayName">none</b></button>
+        <button class="btn btn--sm" id="btnLearnRepeat" title="Press, then press the key that should repeat the current bar (and switch it off)">Repeat-bar key: <b id="ctlRepeatName">none</b></button>
+        <button class="btn btn--sm btn--ghost" id="btnClearControls">Clear</button>
+      </div>
+      <p class="setgroup__note">Choose a key you never play &mdash; the top or bottom key of the keyboard is usual. It
+        stops making a sound and controls the app instead, so you can start, pause and repeat without
+        reaching for the screen. A keyboard with <b>Start / Stop</b> buttons works without setup.</p>
+      <div class="setgroup__row">
+        <label class="knob knob--inline"><span class="knob__label">Sound delay <em id="latencyVal">0 ms</em></span>
+          <input type="range" id="latency" min="0" max="400" step="5" value="0" aria-label="Sound delay compensation" /></label>
+        <button class="btn btn--sm" id="btnCalibrate">Measure it</button>
+        <span class="rail__readout" id="calibNote"></span>
+      </div>
+      <div class="calib is-hidden" id="calibPanel">
+        <p class="calib__text" id="calibText">Tap along with the clicks &mdash; any key, a MIDI key, or this pad.</p>
+        <button class="calib__pad" id="calibPad" type="button">Tap</button>
+      </div>
+      <p class="setgroup__note">Wireless headphones hear everything late. Without this, Follow mode marks every
+        note you play in time with the sound as late. <b>Measure it</b> plays eight clicks for you to tap along
+        to; the falling notes, the cursor and the scoring are then shifted to match what you hear.</p>
+      <div class="setgroup__row">
+        <label class="field"><span class="field__label">Keyboard size</span>
+          <select id="profileSize" class="select" aria-label="Keyboard size">
+            <option value="88">88 keys (A0–C8)</option>
+            <option value="76">76 keys (E1–G7)</option>
+            <option value="61">61 keys (C2–C7)</option>
+            <option value="49">49 keys (C2–C6)</option>
+            <option value="37">37 keys (C3–C6)</option>
+          </select></label>
+        <label class="field"><span class="field__label">Transpose</span>
+          <select id="profileTranspose" class="select" aria-label="Transpose">
+            <option value="-24">-2 oct</option><option value="-12">-1 oct</option>
+            <option value="0" selected>0</option>
+            <option value="12">+1 oct</option><option value="24">+2 oct</option>
+          </select></label>
+        <label class="field"><span class="field__label">Sound</span>
+          <select id="profileBackend" class="select" aria-label="Instrument sound">
+            <option value="synth">Offline synth (no internet)</option>
+            <option value="acoustic_grand_piano">Grand piano (bundled, offline)</option>
+            <option value="bright_acoustic_piano">Bright piano</option>
+            <option value="electric_piano_1">Electric piano</option>
+            <option value="harpsichord">Harpsichord</option>
+            <option value="vibraphone">Vibraphone</option>
+            <option value="music_box">Music box</option>
+          </select></label>
+        <span class="rail__readout" id="backendNote">offline synth</span>
+      </div>
+    </section>
+
+    <section class="setgroup">
+      <h3 class="setgroup__title">Your data</h3>
+      <p class="setgroup__hint">Saved pieces, fingerings, best scores and the practice log live in this browser only.</p>
+      <div class="setgroup__row">
+        <button class="btn btn--sm" id="btnExportData">Save a backup</button>
+        <button class="btn btn--sm" id="btnImportData">Restore a backup</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden />
+        <span class="rail__readout" id="dataNote"></span>
+      </div>
+      <p class="setgroup__note">Opening the app from the folder and opening it with
+        <b>Start Piano Trainer.cmd</b> count as two different places to the browser, each with its own
+        memory. Save a backup in one and restore it in the other to bring everything across.</p>
+    </section>
+  </dialog>
+
+  <!-- ============ shortcuts ============ -->
+  <dialog class="sheetdlg" id="helpDialog" aria-label="Keyboard shortcuts">
+    <div class="sheetdlg__head">
+      <h2>Shortcuts</h2>
+      <button class="btn btn--sm btn--ghost" id="btnHelpClose">Close</button>
+    </div>
+    <dl class="keys">
+      <dt><kbd class="key">Space</kbd></dt><dd>Play / pause &mdash; and skips the count-in while it's running</dd>
+      <dt><kbd class="key">&larr;</kbd> <kbd class="key">&rarr;</kbd></dt><dd>Seek 5 seconds</dd>
+      <dt><kbd class="key">,</kbd> <kbd class="key">.</kbd></dt><dd>Step back / forward one chord</dd>
+      <dt><kbd class="key">M</kbd></dt><dd>Metronome on / off (its sound and count-in are in Settings)</dd>
+      <dt><kbd class="key">B</kbd></dt><dd>Repeat the bar you're in</dd>
+      <dt><kbd class="key">C</kbd></dt><dd>Stop repeating</dd>
+      <dt><kbd class="key">[</kbd> <kbd class="key">]</kbd></dt><dd>Tempo down / up 5%</dd>
+      <dt><kbd class="key">1</kbd>&hellip;<kbd class="key">5</kbd> <kbd class="key">0</kbd></dt><dd>Set a finger, or back to automatic, while fingering edit is on</dd>
+      <dt><kbd class="key">Z</kbd> <kbd class="key">X</kbd></dt><dd>Move the typing keyboard down / up an octave</dd>
+      <dt><kbd class="key">?</kbd></dt><dd>This list</dd>
+    </dl>
+
+    <div class="typemap">
+      <p class="typemap__title">The keyboard plays like a piano</p>
+      <div class="typemap__rows" aria-hidden="true">
+        <div class="typemap__row typemap__row--black">
+          <b>W</b><b>E</b><i>R</i><b>T</b><b>Y</b><b>U</b><i>I</i><b>O</b><b>P</b><span></span><span></span>
+        </div>
+        <div class="typemap__row typemap__row--white">
+          <b>A</b><b>S</b><b>D</b><b>F</b><b>G</b><b>H</b><b>J</b><b>K</b><b>L</b><b>;</b><b>'</b>
+        </div>
+        <div class="typemap__row typemap__row--note">
+          <span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span>
+        </div>
+      </div>
+      <p class="keys__note typemap__note">The home row is the white keys; the row above holds the
+        sharps, each one sitting in the gap it divides. <kbd class="key">R</kbd> and
+        <kbd class="key">I</kbd> stay silent, because a piano has no black key between E&ndash;F or
+        B&ndash;C &mdash; that gap is what lets you find your place by touch. The reachable stretch
+        is marked in green under the on-screen keys, and
+        <kbd class="key">Z</kbd>&thinsp;/&thinsp;<kbd class="key">X</kbd> move it an octave at a time.
+        Keys are read by position, so the layout is the same on a Romanian, German or French
+        keyboard.</p>
+    </div>
+  </dialog>
+
+  <!-- libraries (vendored, MIT/BSD) -->
+  <script src="lib/Tone.js"></script>
+  <script src="lib/Midi.js"></script>
+  <script src="lib/opensheetmusicdisplay.min.js"></script>
+  <script src="lib/soundfont-player.min.js"></script>
+
+  <!-- app modules: helpers → data → engine → views → bootstrap -->
+  <script src="src/keys.js"></script>
+  <script src="src/timing.js"></script>
+  <script src="src/mxl.js"></script>
+  <script src="src/parser.js"></script>
+  <script src="src/theory.js"></script>
+  <script src="src/convert-midi-to-xml.js"></script>
+  <script src="src/convert-xml-to-midi.js"></script>
+  <script src="src/fingering.js"></script>
+  <script src="src/profiles.js"></script>
+  <script src="src/storage.js"></script>
+  <script src="src/practice-log.js"></script>
+  <script src="src/samples.js"></script>
+  <script src="src/audio-engine.js"></script>
+  <script src="src/transport.js"></script>
+  <script src="src/sheet-view.js"></script>
+  <script src="src/pianoroll-view.js"></script>
+  <script src="src/keyboard-view.js"></script>
+  <script src="src/midi-input.js"></script>
+  <script src="src/practice.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
