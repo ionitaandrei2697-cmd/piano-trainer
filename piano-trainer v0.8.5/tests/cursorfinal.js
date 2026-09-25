@@ -1,5 +1,5 @@
 const {open}=require("./harness");
-const ROOT=process.argv[2]||"/home/claude/work/out";
+const ROOT=process.argv[2]||require("path").join(__dirname,"..");
 (async()=>{
   const {pg,close}=await open(ROOT);
   await pg.setViewport({width:1440,height:1000});

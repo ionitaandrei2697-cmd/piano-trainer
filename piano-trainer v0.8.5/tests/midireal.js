@@ -2,14 +2,14 @@
  * structure of the uploaded "The World": meter changes, a few bass notes below
  * C2 (some in octaves), and chords too wide for one hand. */
 const puppeteer=require("puppeteer"), http=require("http"), fs=require("fs"), path=require("path");
-const ROOT=process.argv[2]||"/home/claude/work/out"; const FIX=path.join(__dirname,"fixtures","Mixed_Meter_Test.mid");
+const ROOT=process.argv[2]||require("path").join(__dirname,".."); const FIX=path.join(__dirname,"fixtures","Mixed_Meter_Test.mid");
 const MIME={".html":"text/html",".js":"text/javascript",".css":"text/css",".svg":"image/svg+xml"};
 let pass=0,fail=0; const chk=(n,ok,x)=>{ok?pass++:fail++;console.log((ok?"  PASS  ":"  FAIL  ")+n+(!ok&&x!==undefined?"  <- "+JSON.stringify(x):""));};
 (async()=>{
   const srv=http.createServer((q,s)=>{let p=decodeURIComponent(q.url.split("?")[0]);if(p==="/")p="/index.html";
     fs.readFile(path.join(ROOT,p),(e,d)=>{if(e){s.writeHead(404);return s.end();}s.writeHead(200,{"Content-Type":MIME[path.extname(p)]||"application/octet-stream"});s.end(d);});});
   await new Promise(r=>srv.listen(0,r));
-  const b=await puppeteer.launch({headless:"new",executablePath:"/home/claude/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome",args:["--no-sandbox","--mute-audio","--autoplay-policy=no-user-gesture-required"]});
+  const b=await puppeteer.launch({headless:"new",executablePath:(process.env.CHROME_PATH||undefined),args:["--no-sandbox","--mute-audio","--autoplay-policy=no-user-gesture-required"]});
   const pg=await b.newPage(); const errs=[]; pg.on("pageerror",e=>errs.push(e.message)); await pg.setViewport({width:1440,height:830});
   await pg.evaluateOnNewDocument(()=>{
     const inp={id:"k",name:"USB-MIDI",state:"connected",connection:"open",type:"input",onmidimessage:null};

@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,close}=await open("/home/claude/work/out");
+  const {pg,close}=await open(require("path").join(__dirname,".."));
   const client=await pg.target().createCDPSession();
   const report=async(label,w,h,touch)=>{
     await pg.setViewport({width:w,height:h,deviceScaleFactor:2,hasTouch:touch});

@@ -8,7 +8,7 @@
  *   - midiDeviceId   (preferred input)
  *   - audioBackend   ("synth" | "piano")
  *   - noteSpeed      (piano-roll px/sec)
- *   - handSize       (XS..XL, for fingering)
+ *   - handReach      (widest 1-5 stretch in semitones, for fingering; handSize XS..XL is the older form)
  *
  * Presets cover the common digital-keyboard sizes. Custom profiles can be saved
  * to IndexedDB. Pure data + helpers, unit-testable.
@@ -38,6 +38,7 @@
       controlKeys: { play: null, repeat: null },
       noteSpeed: 130,      // px/sec for the falling notes
       handSize: "M",
+      handReach: 15,       // semitones, thumb to little finger stretched (15 = average adult hand)
     };
   }
 

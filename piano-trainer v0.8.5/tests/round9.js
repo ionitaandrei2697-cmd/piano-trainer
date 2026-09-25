@@ -1,13 +1,13 @@
 /* Round 9: the other hand is silent when you learn one hand; finger numbers
  * are large discs; messages don't take room (hover over the falling notes). */
 const puppeteer=require("puppeteer"), http=require("http"), fs=require("fs"), path=require("path");
-const ROOT=process.argv[2]||"/home/claude/work/out"; const MIME={".html":"text/html",".js":"text/javascript",".css":"text/css",".svg":"image/svg+xml"};
+const ROOT=process.argv[2]||require("path").join(__dirname,".."); const MIME={".html":"text/html",".js":"text/javascript",".css":"text/css",".svg":"image/svg+xml"};
 let pass=0,fail=0; const chk=(n,ok,x)=>{ok?pass++:fail++;console.log((ok?"  PASS  ":"  FAIL  ")+n+(!ok&&x!==undefined?"  <- "+JSON.stringify(x):""));};
 (async()=>{
   const srv=http.createServer((q,s)=>{let p=decodeURIComponent(q.url.split("?")[0]);if(p==="/")p="/index.html";
     fs.readFile(path.join(ROOT,p),(e,d)=>{if(e){s.writeHead(404);return s.end();}s.writeHead(200,{"Content-Type":MIME[path.extname(p)]||"application/octet-stream"});s.end(d);});});
   await new Promise(r=>srv.listen(0,r));
-  const b=await puppeteer.launch({headless:"new",executablePath:"/home/claude/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome",args:["--no-sandbox","--mute-audio","--autoplay-policy=no-user-gesture-required"]});
+  const b=await puppeteer.launch({headless:"new",executablePath:(process.env.CHROME_PATH||undefined),args:["--no-sandbox","--mute-audio","--autoplay-policy=no-user-gesture-required"]});
   const pg=await b.newPage(); const errs=[]; pg.on("pageerror",e=>errs.push(e.message)); await pg.setViewport({width:1440,height:830,deviceScaleFactor:1});
   await pg.goto("http://localhost:"+srv.address().port+"/index.html?debug",{waitUntil:"networkidle2"}); await pg.waitForFunction("window.PT && window.PT.__app",{timeout:15000});
   await pg.evaluate(async()=>{const s=document.getElementById("sampleList");s.value="odeToJoy";s.dispatchEvent(new Event("change"));await new Promise(r=>setTimeout(r,2600));});

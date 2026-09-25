@@ -271,10 +271,27 @@
         }
         return "correct";
       }
+      if (this._isOrnament(midi)) return this._ignored();
       this._credit(false);
       this._recordError();
       this._feedback(midi, "wrong", null, null, e);
       return "wrong";
+    }
+
+    /**
+     * fn(midi, songSec) -> true when a press of `midi` near `songSec` is an
+     * ornament written in the score (a grace note). Playing it is right, but
+     * it is not a note the gate waits for, so it is neither correct nor wrong.
+     */
+    setOrnamentTest(fn) { this._ornament = fn || null; }
+    _isOrnament(midi) {
+      if (!this._ornament) return false;
+      const t = this._positionGetter ? this._positionGetter() : 0;
+      return !!this._ornament(midi, t);
+    }
+    _ignored() {
+      this.lastHit = { type: "ignored", offsetSec: null, grade: "ontime" };
+      return "ignored";
     }
 
     /** Open the gate: advance first, then announce (see note on ordering). */
@@ -351,6 +368,7 @@
         this._feedback(midi, "correct", grade, bestSigned, e);
         return "correct";
       }
+      if (this._isOrnament(midi)) return this._ignored();
       this._credit(false);
       this._recordError();
       this._feedback(midi, "wrong", null, null);

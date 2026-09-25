@@ -77,9 +77,61 @@
   }
 
   // ---- MusicXML / OSMD -----------------------------------------------------
-  function extractFromOSMD(osmd, timingApi) {
+  const KEYBOARD_NAME = /pian|pno|klav|clav|keyboard|keys\b|fortepiano|cemb|harpsi|organ|orgel|celest|synth|épinette|spinet/i;
+  const PERC_NAME = /drum|perc|batter|schlag|timpan|kit\b|cymbal|snare/i;
+  /**
+   * WHICH STAVES ARE THE PIANIST'S. Staff 0 used to be "the right hand" and
+   * every other staff "the left hand" — right for a piano score, wrong for
+   * anything else: in a song for voice and piano the singer's line became the
+   * right hand and BOTH piano staves the left, so Wait mode asked for the
+   * vocal melody and the whole accompaniment at once. Now each part (MusicXML
+   * instrument) is Practice / Backing / Off, as MIDI tracks are: the keyboard
+   * part (by name, else the first two-stave part) is practised — its upper
+   * staff the right hand, the rest the left — and the others play along.
+   * Without a keyboard part, one or two lines are yours; an ensemble gives
+   * its top line to the right hand and its bass to the left.
+   */
+  function scorePartsInfo(sheet) {
+    return (sheet.Instruments || []).map((ins, i) => {
+      const name = String((ins.Name != null ? ins.Name : ins.NameLabel && ins.NameLabel.text) || "").trim();
+      const staves = (ins.Staves || []).map((s) => s.idInMusicSheet);
+      return { index: i, name, staves, staffCount: staves.length, percussion: PERC_NAME.test(name) };
+    });
+  }
+  function defaultScoreParts(info) {
+    const out = {};
+    for (const p of info) out[p.index] = p.percussion ? "off" : "backing";
+    const pitched = info.filter((p) => !p.percussion);
+    if (!pitched.length) { for (const p of info) out[p.index] = "practice"; return out; }
+    // a keyboard part; or its two hands written as two one-staff parts
+    // ("Piano (right)" + "Piano (left)"), which are practised together
+    const keyboards = pitched.filter((p) => KEYBOARD_NAME.test(p.name));
+    if (keyboards.length >= 2 && keyboards.slice(0, 2).every((p) => p.staffCount === 1)) {
+      out[keyboards[0].index] = out[keyboards[1].index] = "practice"; return out;
+    }
+    const piano = keyboards[0] || pitched.find((p) => p.staffCount >= 2);
+    if (piano) { out[piano.index] = "practice"; return out; }
+    if (pitched.length <= 2) { for (const p of pitched) out[p.index] = "practice"; return out; }
+    out[pitched[0].index] = "practice"; out[pitched[pitched.length - 1].index] = "practice";
+    return out;
+  }
+
+  function extractFromOSMD(osmd, timingApi, opts) {
+    opts = opts || {};
     const sheet = osmd.Sheet;
     const defaultBpm = sheet.DefaultStartTempoInBpm || 120;
+
+    // parts: which staves are practised (and as which hand), which play along
+    const partsInfo = scorePartsInfo(sheet);
+    const roles = Object.assign(defaultScoreParts(partsInfo), opts.parts || {});
+    if (!partsInfo.some((p) => roles[p.index] === "practice")) Object.assign(roles, defaultScoreParts(partsInfo));
+    const staffRole = new Map();          // idInMusicSheet -> { role, hand }
+    let firstPracticeStaff = null;
+    for (const p of partsInfo) for (const id of p.staves) {
+      const role = roles[p.index];
+      if (role === "practice" && firstPracticeStaff == null) firstPracticeStaff = id;
+      staffRole.set(id, { role, hand: role === "practice" ? (id === firstPracticeStaff ? 0 : 1) : null });
+    }
 
     // 1) Measure table (for tempo + timing). Tempo carries forward when a
     //    measure has no explicit mark.
@@ -120,17 +172,27 @@
         for (let si = 0; si < staffEntries.length; si++) {
           const se = staffEntries[si];
           if (!se) continue;
-          const staffIndex = se.ParentStaff ? se.ParentStaff.idInMusicSheet : si;
-          staffSet.add(staffIndex);
+          const sheetStaff = se.ParentStaff ? se.ParentStaff.idInMusicSheet : si;
+          const sr = staffRole.get(sheetStaff) || { role: "practice", hand: sheetStaff === 0 ? 0 : 1 };
+          if (sr.role === "off") continue;
+          const backing = sr.role === "backing";
 
           const voiceEntries = se.VoiceEntries;
           for (let vi = 0; vi < voiceEntries.length; vi++) {
             const ve = voiceEntries[vi];
+            // Grace notes take no time in the bar: the engine files them at
+            // their main note's onset, so they used to become extra chord
+            // notes that Wait mode demanded TOGETHER with the main note. They
+            // are ornaments now: heard just before the beat, never required,
+            // and pressing one isn't counted as a wrong note.
+            const grace = !!ve.IsGrace;
             const veNotes = ve.Notes;
             for (let ni = 0; ni < veNotes.length; ni++) {
               const note = veNotes[ni];
               if (note.isRest && note.isRest()) continue;
               if (!note.Pitch) continue;
+              if (note.IsCueNote) continue;                 // cue notes are someone else's part, printed small
+              if (!backing) staffSet.add(sr.hand);
 
               // Tie handling: only the start note triggers; its sounded length
               // is the FULL tied duration. Continuation notes are skipped.
@@ -143,18 +205,28 @@
 
               const freq = note.Pitch.Frequency;
               const midi = freqToMidi(freq);
-              if (midi < minMidi) minMidi = midi;
-              if (midi > maxMidi) maxMidi = midi;
+              if (!backing && !grace) {
+                if (midi < minMidi) minMidi = midi;
+                if (midi > maxMidi) maxMidi = midi;
+              }
 
               const durSec = timing.wholeToSeconds(onsetWhole + durWhole) - onsetSec;
-              const rec = {
+              const rec = grace ? {
+                midi, freq,
+                startSec: Math.max(0, onsetSec - 0.07),     // just ahead of the beat
+                durSec: 0.07,
+                staff: backing ? (midi >= 60 ? 0 : 1) : sr.hand,
+                measure: mi,
+                backing: true, ornament: true,
+              } : {
                 midi,
                 freq,
                 startSec: onsetSec,
                 durSec: Math.max(0.03, durSec),
-                staff: staffIndex,
+                staff: backing ? (midi >= 60 ? 0 : 1) : sr.hand,
                 measure: mi,
               };
+              if (backing && !grace) rec.backing = true;
               // The OSMD source note is the key that finds this note's
               // engraved notehead after ANY re-render (the SVG elements are
               // rebuilt each time, the source objects are not). Non-enumerable
@@ -200,6 +272,7 @@
         maxMidi: isFinite(maxMidi) ? maxMidi : 0,
       },
       bars: barsFromTable(timing.table, timing.totalSeconds, tsNum, tsDen),
+      scoreParts: partsInfo.map((p) => ({ index: p.index, name: p.name, staffCount: p.staffCount, percussion: p.percussion, part: roles[p.index] })),
     };
   }
 
@@ -427,7 +500,7 @@
     };
   }
 
-  const api = { extractFromOSMD, parseMIDI, midiTracks, defaultParts, midiBars, repairReach, freqToMidi, midiToFreq, assignIds, splitHandsByPitch };
+  const api = { extractFromOSMD, defaultScoreParts, scorePartsInfo, parseMIDI, midiTracks, defaultParts, midiBars, repairReach, freqToMidi, midiToFreq, assignIds, splitHandsByPitch };
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;

@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 const fs=require("fs");
-const ROOT=process.argv[2]||"/home/claude/work/out";
+const ROOT=process.argv[2]||require("path").join(__dirname,"..");
 let pass=0, fail=0;
 const chk=(n,ok,extra)=>{ ok?pass++:fail++; console.log((ok?"  PASS  ":"  FAIL  ")+n+(extra!==undefined&&!ok?"  <- "+JSON.stringify(extra):"")); };
 
@@ -187,7 +187,7 @@ const chk=(n,ok,extra)=>{ ok?pass++:fail++; console.log((ok?"  PASS  ":"  FAIL  
 
   // ---------- new: .mxl ------------------------------------------------------
   console.log("\n[new] compressed MusicXML");
-  const b64=fs.readFileSync("/home/claude/work/t/fixtures/ode.mxl").toString("base64");
+  const b64=fs.readFileSync(require("path").join(__dirname,"fixtures","ode.mxl")).toString("base64");
   const mxl=await ev(async(b64)=>{
     const bin=atob(b64); const u=new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);

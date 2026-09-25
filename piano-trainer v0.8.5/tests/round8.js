@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,logs,close}=await open("/home/claude/work/out","?debug");
+  const {pg,logs,close}=await open(require("path").join(__dirname,".."),"?debug");
   await pg.setViewport({width:1440,height:900});
   let pass=0,fail=0;
   const chk=(n,ok,x)=>{ok?pass++:fail++;console.log((ok?"  PASS  ":"  FAIL  ")+n+(!ok&&x!==undefined?"  <- "+JSON.stringify(x):""));};
@@ -161,7 +161,7 @@ const {open}=require("./harness");
   chk("drag the falling notes to scrub, and the drag isn't read as a click", Math.abs(r.p1-r.expect)<0.12, r);
 
   console.log("[defaults & first run]");
-  const {pg:pg2,close:close2}=await require("./harness").open("/home/claude/work/out");
+  const {pg:pg2,close:close2}=await require("./harness").open(require("path").join(__dirname,".."));
   r=await pg2.evaluate(async()=>{for(let i=0;i<50;i++){ await new Promise(r=>setTimeout(r,200)); if(/loaded|failed/.test(document.getElementById("backendNote").textContent)) break; }
     return {first:!document.getElementById("firstRun").classList.contains("is-hidden"), sound:document.getElementById("backendNote").textContent};});
   chk("a new user starts on the bundled grand piano", /grand piano.*loaded/.test(r.sound), r.sound);

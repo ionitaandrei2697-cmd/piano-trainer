@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,close}=await open("/home/claude/work/out");
+  const {pg,close}=await open(require("path").join(__dirname,".."));
   const out=await pg.evaluate(async()=>{
     const s=document.getElementById("sampleList"); s.value="scale"; s.dispatchEvent(new Event("change"));
     await new Promise(r=>setTimeout(r,2600));

@@ -112,6 +112,7 @@
       "hud","hudText","hudBar","hudBarWrap","fingerPad","fingerScope","scopeNote","scopePitch","scopePitchLabel","btnResetFingering","btnQuickListen","btnQuickLearn",
       "btnLearnPlay","btnLearnRepeat","btnClearControls","ctlPlayName","ctlRepeatName",
       "latency","latencyVal","btnCalibrate","calibNote","calibPanel","calibText","calibPad","dropZone",
+      "handReach","handCm","handNote","fingerStyles","setNav","toasts","btnStyles","pieceInfo",
     ].forEach((id) => { els[id] = $(id); });
   }
 
@@ -134,9 +135,16 @@
    * rare message that needs you to act — show for a few seconds regardless.
    */
   let alertTimer = 0;
-  function setStatus(msg, kind) {
+  /**
+   * opts.toast: false for practice feedback (it has the heads-up display);
+   * otherwise a message with a kind also shows as a toast — except while the
+   * music is playing, when only an error may interrupt.
+   */
+  function setStatus(msg, kind, opts) {
     els.status.textContent = msg;
     els.status.className = "status" + (kind ? " status--" + kind : "");
+    const playing = transport && transport.isPlaying && !transport.inCountIn;
+    if (msg && kind && !(opts && opts.toast === false) && (!playing || kind === "err")) toast(msg, kind);
     if (!els.hud) return;
     els.hudText.textContent = msg;
     els.hud.className = "hud" + (kind ? " hud--" + kind : "") + (msg ? "" : " is-empty");
@@ -155,10 +163,43 @@
    *   opts.ms      how long a transient message stays (default 2.6 s)
    *   opts.holdMs  run the progress bar for this long (a hold in Wait)
    */
+  /*
+   * TOASTS: what just happened, for a few seconds, in the corner. The first
+   * sentence is set bold so a long load summary reads at a glance; hovering
+   * holds it, the x dismisses it. At most three at a time; a repeat of the
+   * newest one replaces it instead of stacking.
+   */
+  function toast(msg, kind) {
+    const box = els.toasts;
+    if (!box) return;
+    const last = box.lastElementChild;
+    if (last && last.dataset.msg === msg) last.remove();
+    const t = document.createElement("div");
+    t.className = "toast toast--" + (kind || "ok");
+    t.dataset.msg = msg;
+    const text = document.createElement("div"); text.className = "toast__text";
+    const m = /^(.+?[.!?\u2014])(\s.*)?$/.exec(msg);
+    if (m && m[2]) { const b = document.createElement("b"); b.textContent = m[1]; text.append(b, document.createTextNode(m[2])); }
+    else text.textContent = msg;
+    const x = document.createElement("button"); x.className = "toast__close"; x.type = "button"; x.textContent = "\u00d7";
+    x.setAttribute("aria-label", "Dismiss"); x.tabIndex = -1;
+    t.append(text, x);
+    box.appendChild(t);
+    while (box.children.length > 3) box.firstElementChild.remove();
+    const life = kind === "err" ? 9000 : kind === "warn" ? 7000 : Math.min(7000, 3200 + msg.length * 18);
+    let timer = 0;
+    const leave = () => { t.classList.add("is-leaving"); setTimeout(() => t.remove(), 220); };
+    const arm = () => { clearTimeout(timer); timer = setTimeout(leave, life); };
+    t.addEventListener("mouseenter", () => clearTimeout(timer));
+    t.addEventListener("mouseleave", arm);
+    x.addEventListener("click", leave);
+    arm();
+  }
+
   let hudTimer = null;
   function coach(msg, kind, opts) {
     opts = opts || {};
-    setStatus(msg, kind);
+    setStatus(msg, kind, { toast: false });
     if (!els.hud) return;
     clearTimeout(hudTimer);
     const bar = els.hudBar;
@@ -236,18 +277,179 @@
   };
   function instrumentLabel(v) { return INSTRUMENT_LABELS[v] || v; }
 
+  // ============================================================ your hand
+  /*
+   * The fingering is worked out for the player's hand. It is described the
+   * way a teacher asks — the widest interval thumb to little finger — and
+   * stored in semitones (profile.handReach). The average adult hand of the
+   * fingering model reaches 15: between a ninth and a tenth.
+   */
+  function handSpec() {
+    return { reach: profile.handReach || (PT.fingering.HAND_REACH && PT.fingering.HAND_REACH[profile.handSize]) || 15 };
+  }
+  const REACH_NAMES = [[11.5, "less than an octave"], [13, "an octave"], [14.5, "a ninth"], [15.5, "between a ninth and a tenth"], [16.75, "a tenth"], [Infinity, "an eleventh or more"]];
+  const reachName = (st) => REACH_NAMES.find(([lim]) => st < lim)[1];
+  /*
+   * Hand span in cm -> the widest interval, a RULE OF THUMB rather than a
+   * measurement: a white key is 2.35 cm wide (an octave is 16.5 cm on a
+   * standard keyboard), each white key is on average 12/7 semitones, and
+   * about 2 cm of the span goes to the fingertips landing inside the keys.
+   * It gives an octave at 18 cm and a ninth-to-tenth at 22 cm, in line with
+   * published hand-span surveys, but a hand's flexibility matters as much as
+   * its length — the interval you can play is the better input.
+   */
+  const cmToReach = (cm) => ((cm - 2) / 2.35) * (12 / 7);
+  const STYLE_TEXT = {
+    balanced: ["Balanced", "Fewest hand moves, then the most comfortable fingers \u2014 the method-book choice."],
+    compact: ["Stay in position", "Stretches instead of moving the hand: fewer shifts. For a hand that reaches a tenth."],
+    relaxed: ["Relaxed hand", "Never stretches past a relaxed span; the hand moves more often instead. For small hands."],
+    legato: ["Legato", "Passes the thumb under (or a finger over) rather than lifting the hand, to keep lines joined."],
+  };
+  let fingerStrategy = null;      // this piece's fingering style; null = the one suggested for the hand
+  const currentStrategy = () => fingerStrategy || PT.fingering.suggestedStrategy(handSpec());
+
+  function showHand() {
+    const reach = handSpec().reach;
+    const opts = [...els.handReach.options].map((o) => parseFloat(o.value));
+    let best = opts[0];
+    for (const v of opts) if (Math.abs(v - reach) < Math.abs(best - reach)) best = v;
+    els.handReach.value = String(best);
+    els.handNote.textContent = "reaches " + reachName(reach) + " \u00b7 " + STYLE_TEXT[PT.fingering.suggestedStrategy(handSpec())][0].toLowerCase() + " suggested";
+  }
+  /** Settings -> Your hand: every fingering style, measured on the open piece. */
+  let stylesTimer = 0;
+  function renderStyles() {
+    const box = els.fingerStyles;
+    if (!box) return;
+    clearTimeout(stylesTimer);
+    if (!song || !song.notes.some((n) => !n.backing)) { box.innerHTML = "<p class='styles__empty'>Open a piece to compare fingering styles for it.</p>"; return; }
+    box.innerHTML = "<p class='styles__empty'>Measuring the styles on this piece\u2026</p>";
+    stylesTimer = setTimeout(() => {
+      const list = PT.fingering.variants(song, handSpec(), { pins: currentPins() });
+      const cur = currentStrategy();
+      box.innerHTML = "";
+      for (const v of list) {
+        const [name, desc] = STYLE_TEXT[v.strategy];
+        const lab = document.createElement("label");
+        lab.className = "style" + (v.strategy === cur ? " is-on" : "");
+        const inp = document.createElement("input");
+        inp.type = "radio"; inp.name = "fingerStyle"; inp.value = v.strategy; inp.checked = v.strategy === cur;
+        const body = document.createElement("span"); body.className = "style__body";
+        const h = document.createElement("span"); h.className = "style__name"; h.textContent = name;
+        if (v.suggested) { const b = document.createElement("em"); b.className = "style__badge"; b.textContent = "suggested for your hand"; h.appendChild(b); }
+        const d = document.createElement("span"); d.className = "style__desc"; d.textContent = desc;
+        const st = document.createElement("span"); st.className = "style__stats";
+        const pl = (n, w, many) => n + " " + (n === 1 ? w : many || w + "s");
+        st.textContent = [pl(v.jumps, "shift"), pl(v.passes, "pass", "passes"), pl(v.stretches, "stretch", "stretches")]
+          .concat(v.alternations ? [pl(v.alternations, "finger change") + " on repeated notes"] : [])
+          .concat(v.wideChords ? [pl(v.wideChords, "chord") + " too wide to hold"] : []).join(" \u00b7 ");
+        body.append(h, d, st);
+        lab.append(inp, body);
+        box.appendChild(lab);
+      }
+    }, 30);
+  }
+  function setFingerStrategy(name) {
+    fingerStrategy = name === PT.fingering.suggestedStrategy(handSpec()) ? null : name;
+    applyFingerOverrides();
+    saveFingerings();
+    drawFrame();
+    for (const l of els.fingerStyles.querySelectorAll(".style")) l.classList.toggle("is-on", l.querySelector("input").value === name);
+    const fs = song && song.fingerStats;
+    setStatus("Fingering: " + STYLE_TEXT[name][0] + (fs ? " \u2014 " + fs.jumps + " shifts, " + fs.passes + " thumb passes, " + fs.stretches + " stretches." : "."), "ok");
+  }
+  function setHandReach(reach) {
+    profile.handReach = Math.max(9, Math.min(21, reach));
+    persistProfile();
+    showHand();
+    if (!song) return;
+    if (song.format === "midi") {        // which notes one hand can hold changes with it
+      reimportMidi({ parts: Object.fromEntries((song.tracks || []).map((t) => [t.index, t.part])), fit: midiOpts.fit }).catch(showErr);
+    } else {
+      applyFingerOverrides(); drawFrame();
+    }
+    renderStyles();
+  }
+
   // ============================================================ loading
-  async function loadMusicXMLText(xml, fallbackTitle, persistAs) {
+  /*
+   * A score reaches the notation engine in up to three attempts, because the
+   * engine's one error ("given music sheet was incomplete or could not be
+   * loaded") covers every way its reader can fail:
+   *   1. the score as written, after normalize() has repaired what is known to
+   *      break it (part list vs parts, misplaced chord marks, bad pitches…);
+   *   2. simplified — notes, rests and structure only;
+   *   3. no engraving at all: the notes read by score-import's own reader, so
+   *      the piece still plays on the falling notes and the keyboard.
+   * The load message says which one it took and what was repaired.
+   */
+  let xmlOpts = { parts: null };               // the open score's part choices
+  let lastXml = null;                          // normalized MusicXML of the open score
+  async function loadMusicXMLText(xml, fallbackTitle, persistAs, choice) {
     setStatus("Parsing notation\u2026");
     await endSession();
     lastMidiBuffer = null;
-    els.sheetPanel.classList.toggle("is-hidden", !show.sheet);
-    els.noSheet.classList.add("is-hidden");
-    await sheet.loadXML(xml);
-    song = PT.parser.extractFromOSMD(sheet.osmd, PT.timing);
-    sheet.bindSong(song);
-    updateZoomLabel();
-    finishLoad(fallbackTitle, "musicxml", xml, persistAs);
+    xmlOpts = { parts: (choice && choice.parts) || null };
+    const SI = PT.scoreImport;
+    const prep = SI.normalize(xml);
+    // re-reading the open score (new part choices) keeps what the first read repaired
+    let fixes = ((choice && choice.fixes) || []).concat(prep.fixes), engraved = true, text = prep.xml, firstErr = null;
+    try {
+      await sheet.loadXML(text);
+    } catch (e1) {
+      firstErr = e1;
+      console.warn("Notation engine refused the score; retrying simplified.", e1);
+      const simple = SI.simplify(text);
+      try {
+        await sheet.loadXML(simple.xml);
+        text = simple.xml;
+        fixes = fixes.concat(simple.fixes);
+      } catch (e2) {
+        console.warn("Simplified score refused too; opening without notation.", e2);
+        engraved = false;
+      }
+    }
+    lastXml = text;
+    if (engraved) {
+      els.sheetPanel.classList.toggle("is-hidden", !show.sheet);
+      els.noSheet.classList.add("is-hidden");
+      song = PT.parser.extractFromOSMD(sheet.osmd, PT.timing, { parts: xmlOpts.parts });
+      sheet.bindSong(song);
+      updateZoomLabel();
+    } else {
+      sheet.clear();
+      song = SI.notesFromMusicXML(text, PT.timing, { parts: xmlOpts.parts });
+      song.engraveError = (firstErr && firstErr.message) || "unknown";
+      els.sheetPanel.classList.add("is-hidden");
+      showNoSheet("unengraved");
+    }
+    song.importFixes = fixes;
+    finishLoad(fallbackTitle, "musicxml", text, persistAs);
+  }
+  /** Re-read the open score with new part choices (Settings -> This piece). */
+  async function rechooseScoreParts(parts) {
+    if (!song || song.format !== "musicxml" || !lastXml) return;
+    const at = transport.position;
+    await loadMusicXMLText(lastXml, pieceName || song.title, { id: pieceId, store: true }, { parts, fixes: song.importFixes || [] });
+    if (at > 0) seekTo(Math.min(at, transport.duration || at));
+  }
+
+  /** The panel shown where the score would be: a MIDI file, or a score that could not be engraved. */
+  function showNoSheet(kind) {
+    els.noSheet.classList.remove("is-hidden");
+    els.noSheet.dataset.kind = kind;
+    const h = els.noSheet.querySelector("h2"), p = els.noSheet.querySelector("p");
+    if (kind === "unengraved") {
+      h.textContent = "This score opened without its notation";
+      p.innerHTML = "The notation engine could not draw it, even simplified, so it is open <b>as notes only</b>: " +
+        "the falling notes, the keyboard, scoring and every practice mode work. " +
+        "<b>Make a simple score</b> re-writes the notes as a clean two-staff score the engine can draw.";
+      els.btnConvertSheet.textContent = "Make a simple score";
+    } else {
+      h.textContent = "No notation in this file";
+      p.innerHTML = "MIDI carries no sheet music. You can <b>convert it into notation</b> below &mdash; it estimates the key, spells the notes, and lays them out on two staves &mdash; or play it as it is, with the falling notes, the keyboard, scoring and the practice modes.";
+      els.btnConvertSheet.textContent = "Convert to sheet music";
+    }
   }
   // ============================================================ MIDI import
   const bufToB64 = (buf) => { const u = new Uint8Array(buf); let t = ""; for (let i = 0; i < u.length; i += 0x8000) t += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(t); };
@@ -275,7 +477,6 @@
    * (then notes you can't reach are played by the app instead of asked).
    */
   const FIT_FEW = 0.15;         // up to this share of notes outside: move only those
-  const HAND_SPAN = { XS: 0.8, S: 0.9, M: 1.0, L: 1.12, XL: 1.25 };
   function fitToKeyboard(sg) {
     const { low, high } = playableSongRange();
     const prac = sg.notes.filter((n) => !n.backing);
@@ -345,23 +546,55 @@
     return bits.join(" \u00b7 ");
   }
 
-  /** Settings -> This piece: the tracks of a MIDI file and what each one does. */
+  /** What loading a score did: which parts are yours, and what was repaired. */
+  function scoreSummary(sg) {
+    const bits = [];
+    const parts = sg.scoreParts || [];
+    if (parts.length > 1) {
+      const nm = (p) => p.name || "part " + (p.index + 1);
+      const prac = parts.filter((p) => p.part === "practice").map(nm);
+      const back = parts.filter((p) => p.part === "backing").map(nm);
+      bits.push("practising " + prac.join(" + "));
+      if (back.length) bits.push("backing: " + back.join(", ") + " (Settings \u2192 This piece)");
+    }
+    if (sg.importFixes && sg.importFixes.length) bits.push("repaired on import: " + sg.importFixes.join("; "));
+    return bits.join(" \u00b7 ");
+  }
+
+  /**
+   * Settings -> This piece: the parts of the open piece and what each one does
+   * — the tracks of a MIDI file, or the instruments of a score (voice + piano,
+   * a band arrangement…). Fitting to the keyboard applies to MIDI only: a
+   * score is never re-written, it has to match its notation.
+   */
   function renderMidiOpts() {
-    const isMidi = song && song.format === "midi" && song.tracks;
-    els.midiOpts.classList.toggle("is-hidden", !isMidi);
-    if (!isMidi) return;
-    els.toggleFitKeys.checked = midiOpts.fit;
-    const f = song.fitResult;
-    els.fitNote.textContent = !midiOpts.fit ? "off" : f && f.shift ? "whole part moved " + (f.shift > 0 ? "up " : "down ") + Math.abs(f.shift) + " oct."
-                            : f && f.folded ? f.folded + " note" + (f.folded === 1 ? "" : "s") + " moved in" : "already fits";
+    const isMidi = !!(song && song.format === "midi" && song.tracks);
+    const scoreParts = song && song.format === "musicxml" && song.scoreParts && song.scoreParts.length > 1 ? song.scoreParts : null;
+    els.midiOpts.classList.toggle("is-hidden", !isMidi && !scoreParts);
+    els.midiOpts.dataset.kind = isMidi ? "midi" : "score";
+    if (!isMidi && !scoreParts) return;
+    const fitRow = els.toggleFitKeys.closest(".setgroup__row");
+    if (fitRow) fitRow.classList.toggle("is-hidden", !isMidi);
+    if (isMidi) {
+      els.toggleFitKeys.checked = midiOpts.fit;
+      const f = song.fitResult;
+      els.fitNote.textContent = !midiOpts.fit ? "off" : f && f.shift ? "whole part moved " + (f.shift > 0 ? "up " : "down ") + Math.abs(f.shift) + " oct."
+                              : f && f.folded ? f.folded + " note" + (f.folded === 1 ? "" : "s") + " moved in" : "already fits";
+    }
     els.midiParts.innerHTML = "";
-    for (const t of song.tracks) {
+    const rows = isMidi
+      ? song.tracks.map((t) => ({ index: t.index, part: t.part, off: t.part === "off",
+          name: t.name || "Track " + (t.index + 1),
+          meta: (t.instrument || "") + " \u00b7 " + t.count + " notes" + (t.percussion ? "" : " \u00b7 " + midiName(t.lo) + "\u2013" + midiName(t.hi)) }))
+      : scoreParts.map((p) => ({ index: p.index, part: p.part, off: p.part === "off",
+          name: p.name || "Part " + (p.index + 1),
+          meta: p.staffCount + (p.staffCount === 1 ? " staff" : " staves") }));
+    for (const t of rows) {
       const row = document.createElement("div");
-      row.className = "part" + (t.part === "off" ? " is-off" : "");
-      const name = document.createElement("span"); name.className = "part__name"; name.textContent = t.name || "Track " + (t.index + 1);
-      const meta = document.createElement("span"); meta.className = "part__meta";
-      meta.textContent = (t.instrument || "") + " \u00b7 " + t.count + " notes" + (t.percussion ? "" : " \u00b7 " + midiName(t.lo) + "\u2013" + midiName(t.hi));
-      const sel = document.createElement("select"); sel.className = "select select--inline"; sel.setAttribute("aria-label", "Part for " + name.textContent);
+      row.className = "part" + (t.off ? " is-off" : "");
+      const name = document.createElement("span"); name.className = "part__name"; name.textContent = t.name;
+      const meta = document.createElement("span"); meta.className = "part__meta"; meta.textContent = t.meta;
+      const sel = document.createElement("select"); sel.className = "select select--inline"; sel.setAttribute("aria-label", "Part for " + t.name);
       for (const [v, l] of [["practice", "Practice"], ["backing", "Backing"], ["off", "Off"]]) { const o = document.createElement("option"); o.value = v; o.textContent = l; sel.appendChild(o); }
       sel.value = t.part; sel.dataset.track = String(t.index);
       row.append(name, meta, sel);
@@ -385,17 +618,19 @@
     song.fitResult = midiOpts.fit ? fitToKeyboard(song) : null;
     // a hand can't hold a chord wider than its comfortable 1-5 span (13
     // semitones for a medium hand): hand the outer note to the other hand
-    song.reach = PT.parser.repairReach(song.notes, Math.round(13 * (HAND_SPAN[profile.handSize] || 1)));
+    song.reach = PT.parser.repairReach(song.notes, Math.round(PT.fingering.handReach(handSpec()).comfortable));
     practiceRange(song);
     sheet.clear();
+    lastXml = null;
     els.sheetPanel.classList.add("is-hidden");
-    els.noSheet.classList.remove("is-hidden");
+    showNoSheet("midi");
     finishLoad(fallbackTitle, "midi", buf, persistAs);
   }
 
   function finishLoad(fallbackTitle, format, content, persistAs) {
-    // fingering
-    PT.fingering.annotate(song, profile.handSize);
+    // fingering (the piece's own style, if it has one, arrives with its edits)
+    fingerStrategy = null;
+    PT.fingering.annotate(song, handSpec(), { strategy: currentStrategy() });
 
     // views range from profile ∪ song — in PLAYED space, so the falling notes
     // land on exactly the keys the player presses even with transpose set
@@ -413,6 +648,7 @@
     if (song.bars && song.bars.length) { els.loopFrom.max = String(song.bars.length); els.loopTo.max = String(song.bars.length); }
     applyMetronome();
     if (els.firstRun) els.firstRun.classList.add("is-hidden");
+    document.body.classList.remove("is-empty");
 
     passSnapshot = null;
     activeCursor = 0;
@@ -450,14 +686,24 @@
     const r = song.range;
     const played = song.notes.filter((n) => !n.backing);
     const hands = played.some((n) => n.staff >= 1) ? "two hands" : "one hand";
-    const extra = song.format === "midi" ? midiSummary(song) : "";
+    const extra = song.format === "midi" ? midiSummary(song) : scoreSummary(song);
     const outside = song.format !== "midi" ? played.filter((n) => !isPlayable(n)).length : 0;
+    if (els.pieceInfo) {
+      // the load summary stays readable here after its toast is gone
+      els.pieceInfo.textContent = "";
+      const b = document.createElement("b"); b.textContent = title;
+      els.pieceInfo.append(b, document.createTextNode(" \u2014 " + (song.format === "midi" ? "MIDI" : song.hasSheet ? "MusicXML" : "MusicXML, opened as notes only") +
+        " \u00b7 " + played.length + " notes to play" + (extra ? " \u00b7 " + extra : "") + "."));
+    }
+    const head = song.format === "midi" ? "Loaded MIDI. "
+               : song.hasSheet ? "Loaded notation. "
+               : "Opened as notes only \u2014 the notation engine couldn't draw this score (" + (song.engraveError || "unknown error") + "). ";
     setStatus(
-      (song.hasSheet ? "Loaded notation. " : "Loaded MIDI. ") +
-      `${played.length} notes \u00b7 ${midiName(r.minMidi)}\u2013${midiName(r.maxMidi)} \u00b7 ${hands}` +
+      head +
+      (played.length ? `${played.length} notes \u00b7 ${midiName(r.minMidi)}\u2013${midiName(r.maxMidi)} \u00b7 ${hands}` : "no notes to play in this score") +
       (extra ? " \u00b7 " + extra : "") +
       (outside ? ` \u00b7 ${outside} note${outside === 1 ? " is" : "s are"} outside your keyboard and will play by themselves (Transpose in Settings can bring them in)` : ""),
-      song.hasSheet ? "ok" : "warn"
+      song.hasSheet && !(song.importFixes && song.importFixes.length) ? "ok" : "warn"
     );
 
     // persist piece + load its best score and fingering overrides
@@ -470,6 +716,8 @@
       if (format === "midi") {
         rec.parts = Object.fromEntries((song.tracks || []).map((t) => [t.index, t.part]));
         rec.fit = midiOpts.fit;
+      } else if (xmlOpts.parts) {
+        rec.parts = xmlOpts.parts;
       }
       store.put("pieces", rec);
       refreshPieceList();
@@ -486,7 +734,9 @@
     const f = await store.get("fingerings", pieceId);
     fingerOverrides = (f && f.overrides) || {};
     fingerRules = (f && f.rules) || {};
+    fingerStrategy = (f && PT.fingering.STRATEGIES[f.strategy]) ? f.strategy : null;
     applyFingerOverrides();
+    if (els.settingsDialog.open && settingsTab === "hand") renderStyles();
     // Saved edits are easy to forget and look like suggestions: say so.
     const nEdits = Object.keys(fingerOverrides).length + Object.keys(fingerRules).length;
     if (nEdits) {
@@ -523,14 +773,14 @@
   function applyFingerOverrides() {
     if (!song) return 0;
     const before = song.notes.map((n) => n.finger);
-    PT.fingering.annotate(song, profile.handSize, { pins: currentPins() });
+    PT.fingering.annotate(song, handSpec(), { pins: currentPins(), strategy: currentStrategy() });
     let changed = 0;
     song.notes.forEach((n, i) => { if (n.finger !== before[i]) changed++; });
     if (els.btnResetFingering) els.btnResetFingering.disabled = !Object.keys(fingerOverrides).length && !Object.keys(fingerRules).length;
     return changed;
   }
   function saveFingerings() {
-    if (pieceId) store.put("fingerings", { id: pieceId, overrides: fingerOverrides, rules: fingerRules });
+    if (pieceId) store.put("fingerings", { id: pieceId, overrides: fingerOverrides, rules: fingerRules, strategy: fingerStrategy });
   }
   /** Notes an edit on `n` would touch in "every" scope: same pitch, same hand. */
   function samePitchSameHand(n) {
@@ -562,6 +812,9 @@
     practice.setLengthMode(els.lengthMode ? els.lengthMode.value : "strict");
     practice.setPlayable(isPlayable);
     practice.build(song, mode, hand);
+    // grace notes: playing one is right, but no gate waits for it
+    const orn = song.notes.filter((n) => n.ornament);
+    practice.setOrnamentTest(orn.length ? (m, t) => orn.some((n) => n.midi === m && Math.abs(n.startSec - t) < 0.6) : null);
     practice.setPositionGetter(() => perceivedPos());
     practice.setRateGetter(() => transport.rate);
 
@@ -818,6 +1071,8 @@
   }
 
   // ============================================================ input
+  const livePress = new Map();     // midi -> press number, while the key is down
+  let pressSeq = 0;
   function handleNoteOn(midiNote, velocity) {
     if (practice && currentMode() === "wait" && song) {
       if (runFinished) restartWaitRun();          // the first note after the end starts again
@@ -826,7 +1081,16 @@
     }
     // Browsers keep audio muted until a gesture; unlock on the first key so the
     // on-screen keyboard and a MIDI keyboard both sound before Play is pressed.
-    if (!engine.started) { engine.ensureStarted().then(() => engine.noteOnLive(midiNote, PT.parser.midiToFreq(midiNote), velocity || 0.8)); }
+    // The note is sounded once the audio is running — and only if the key is
+    // still down by then: a quick first tap used to start the note AFTER its
+    // release had already been handled, leaving it ringing for good.
+    const press = ++pressSeq;
+    livePress.set(midiNote, press);
+    if (!engine.started) {
+      engine.ensureStarted().then(() => {
+        if (livePress.get(midiNote) === press) engine.noteOnLive(midiNote, PT.parser.midiToFreq(midiNote), velocity || 0.8);
+      });
+    }
     const sounding = midiNote;            // what the player physically pressed
     const songNote = sounding - (profile.transpose || 0); // map back to score pitch
     keyboard.add("user", sounding);
@@ -864,6 +1128,7 @@
     }
   }
   function handleNoteOff(midiNote) {
+    livePress.delete(midiNote);
     keyboard.remove("user", midiNote);
     engine.noteOffLive(midiNote);
     // Release is part of the note too. In Follow it closes the length
@@ -1285,7 +1550,7 @@
       return;
     }
     if (p.format === "midi") { await loadMIDIBuffer(b64ToBuf(p.content), p.name, { id: p.id, store: false }, { parts: p.parts, fit: p.fit }); return; }
-    await loadMusicXMLText(p.content, p.name, { id: p.id, store: false });
+    await loadMusicXMLText(p.content, p.name, { id: p.id, store: false }, p.parts ? { parts: p.parts } : null);
   }
   async function deleteSavedPiece(id) {
     const p = await store.get("pieces", id);
@@ -1366,22 +1631,31 @@
   async function openFile(file) {
     const name = file.name.toLowerCase();
     const stem = file.name.replace(/\.[^.]+$/, "");
-    if (name.endsWith(".mid") || name.endsWith(".midi")) {
-      // The id comes from the file's CONTENT: opening the same file again finds
-      // the same saved piece (its parts, fingering edits and best score) instead
-      // of adding a duplicate under a new timestamp.
-      const buf = await file.arrayBuffer();
-      const saved = await store.get("pieces", "midi-" + contentHash(buf));
-      await loadMIDIBuffer(buf, prettyTitle(stem), { id: "midi-" + contentHash(buf) },
-                           saved ? { parts: saved.parts, fit: saved.fit } : null);
-    } else if (name.endsWith(".mxl")) {
-      setStatus("Unzipping compressed MusicXML\u2026");
-      const xml = await PT.mxl.extract(await file.arrayBuffer());
-      await loadMusicXMLText(xml, stem, { id: "mxl-" + Date.now() });
-    } else if (/\.(xml|musicxml)$/.test(name)) {
-      await loadMusicXMLText(await file.text(), stem, { id: "xml-" + Date.now() });
-    } else {
+    if (!/\.(mid|midi|kar|rmi|mxl|xml|musicxml)$/.test(name)) {
       throw new Error("That isn't a score this app can open \u2014 use MusicXML (.xml, .musicxml, .mxl) or MIDI (.mid).");
+    }
+    // What the file IS decides how it is read, not its extension: a zipped
+    // score saved as .xml, or a MIDI file called .musicxml, used to fail with
+    // the notation engine's generic error. Text is decoded by its real
+    // encoding (UTF-16 scores from Finale/Sibelius were read as UTF-8).
+    const buf = await file.arrayBuffer();
+    if (/\.mxl$/.test(name)) setStatus("Unzipping compressed MusicXML\u2026");
+    const got = await PT.scoreImport.readScoreFile(buf, PT.mxl);
+    // The id comes from the file's CONTENT: opening the same file again finds
+    // the same saved piece (its parts, fingering edits and best score) instead
+    // of adding a duplicate under a new timestamp.
+    if (got.kind === "midi") {
+      const id = "midi-" + contentHash(got.buf);
+      const saved = await store.get("pieces", id);
+      await loadMIDIBuffer(got.buf, prettyTitle(stem), { id }, saved ? { parts: saved.parts, fit: saved.fit } : null);
+    } else {
+      if (!/<score-(partwise|timewise)\b/.test(got.text.slice(0, 20000))) {
+        throw new Error("\u201c" + file.name + "\u201d isn't a MusicXML score" +
+          (/<html/i.test(got.text.slice(0, 2000)) ? " \u2014 it is a web page (a download that saved the page instead of the file)." : "."));
+      }
+      const id = (got.zipped ? "mxl-" : "xml-") + contentHash(new TextEncoder().encode(got.text).buffer);
+      const saved = await store.get("pieces", id);
+      await loadMusicXMLText(got.text, prettyTitle(stem), { id }, saved && saved.parts ? { parts: saved.parts } : null);
     }
   }
 
@@ -1573,14 +1847,14 @@
     });
 
     els.btnConvertSheet.addEventListener("click", async () => {
-      if (!song || song.format !== "midi") return;
+      if (!song || song.hasSheet) return;
       const grid = parseInt(els.convertGrid.value, 10) || 16;
       setStatus("Estimating key, spelling notes, laying out staves\u2026");
       try {
         const src = Object.assign({}, song, { notes: song.notes.filter((n) => !n.backing).map((n) => Object.assign({}, n)) });
         const xml = PT.midiToXML.midiToMusicXML(src, { grid });
         const title = realTitle(song.title) || pieceName || "Converted from MIDI";
-        await loadMusicXMLText(xml, title, { id: "converted-" + Date.now(), store: true });
+        await loadMusicXMLText(xml, title, { id: "converted-" + contentHash(new TextEncoder().encode(xml).buffer), store: true });
         setStatus("Converted to sheet music. It's an automatic first draft \u2014 estimated key/time and 1/" + grid + " quantization; refine in MuseScore if needed. You can also Export MIDI from here.", "ok");
       } catch (e) { showErr(e); }
     });
@@ -1745,7 +2019,7 @@
 
     // MIDI
     els.midiChip.addEventListener("click", async () => {
-      if (midi.enabled && midi.inputs.length) { openDlg(els.settingsDialog); return; }
+      if (midi.enabled && midi.inputs.length) { openSettings("device"); return; }
       await engine.ensureStarted();
       await midi.enable();          // a user gesture: the permission prompt may show
       updateMidiChip();
@@ -1820,7 +2094,29 @@
     // settings window
     const openDlg = (d) => { if (d.showModal) d.showModal(); else d.setAttribute("open", ""); };
     const closeDlg = (d) => { if (d.close) d.close(); else d.removeAttribute("open"); };
-    els.btnSettings.addEventListener("click", () => openDlg(els.settingsDialog));
+    els.btnSettings.addEventListener("click", () => openSettings());
+    els.btnStyles.addEventListener("click", () => openSettings("hand"));
+    els.setNav.addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) showSettingsTab(b.dataset.tab); });
+    els.setNav.addEventListener("keydown", (e) => {
+      const tabs = [...els.setNav.querySelectorAll("[data-tab]")];
+      const i = tabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      const d = (e.key === "ArrowDown" || e.key === "ArrowRight") ? 1 : (e.key === "ArrowUp" || e.key === "ArrowLeft") ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      const next = tabs[(i + d + tabs.length) % tabs.length];
+      next.focus(); showSettingsTab(next.dataset.tab);
+    });
+    els.handReach.addEventListener("change", () => { els.handCm.value = ""; setHandReach(parseFloat(els.handReach.value)); });
+    els.handCm.addEventListener("change", () => {
+      const cm = parseFloat(els.handCm.value);
+      if (!(cm >= 14 && cm <= 28)) { els.handNote.textContent = "a hand span is usually 17\u201325 cm"; return; }
+      setHandReach(Math.round(cmToReach(cm) * 2) / 2);
+    });
+    els.fingerStyles.addEventListener("change", (e) => {
+      const r = e.target.closest("input[name=fingerStyle]");
+      if (r && song) setFingerStrategy(r.value);
+    });
     els.btnSettingsClose.addEventListener("click", () => closeDlg(els.settingsDialog));
     // click on the backdrop closes
     [els.settingsDialog, els.helpDialog].forEach((d) => d.addEventListener("click", (e) => { if (e.target === d) closeDlg(d); }));
@@ -1888,11 +2184,14 @@
     // ---- MIDI parts ----
     els.midiParts.addEventListener("change", (e) => {
       const sel = e.target.closest("select[data-track]");
-      if (!sel || !song || !song.tracks) return;
-      const parts = Object.fromEntries(song.tracks.map((t) => [t.index, t.part]));
+      if (!sel || !song) return;
+      const list = song.format === "midi" ? song.tracks : song.scoreParts;
+      if (!list) return;
+      const parts = Object.fromEntries(list.map((t) => [t.index, t.part]));
       parts[sel.dataset.track] = sel.value;
-      if (!Object.values(parts).includes("practice")) { setStatus("At least one track has to be the one you practise.", "warn"); renderMidiOpts(); return; }
-      reimportMidi({ parts, fit: midiOpts.fit }).catch(showErr);
+      if (!Object.values(parts).includes("practice")) { setStatus("At least one part has to be the one you practise.", "warn"); renderMidiOpts(); return; }
+      if (song.format === "midi") reimportMidi({ parts, fit: midiOpts.fit }).catch(showErr);
+      else rechooseScoreParts(parts).catch(showErr);
     });
     els.toggleFitKeys.addEventListener("change", () => {
       reimportMidi({ parts: Object.fromEntries((song.tracks || []).map((t) => [t.index, t.part])), fit: els.toggleFitKeys.checked }).catch(showErr);
@@ -2126,7 +2425,16 @@
     // to follow the LAYOUT rather than only the window: a ResizeObserver
     // catches panel toggles and font settling as well as a window resize.
     let resizeTimer = null;
+    // toasts sit just under the toolbar, clear of its buttons
+    const placeToasts = () => {
+      const rail = document.querySelector(".rail");
+      if (!rail || !els.toasts) return;
+      els.toasts.style.setProperty("--toast-top", Math.max(12, Math.round(rail.getBoundingClientRect().bottom + 10)) + "px");
+    };
+    placeToasts();
+    window.addEventListener("scroll", placeToasts, { passive: true });
     const relayout = () => {
+      placeToasts();
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         if (show.roll) roll.resize();
@@ -2162,6 +2470,31 @@
       });
       reflow.observe(els.sheetContainer);
     }
+  }
+
+  // ---- settings sections ------------------------------------------------------
+  let settingsTab = "piece";
+  function showSettingsTab(tab) {
+    settingsTab = tab;
+    for (const b of els.setNav.querySelectorAll("[data-tab]")) {
+      const on = b.dataset.tab === tab;
+      b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1;
+    }
+    let first = true;
+    for (const sec of els.settingsDialog.querySelectorAll(".setgroup[data-tab]")) {
+      const on = sec.dataset.tab === tab;
+      sec.hidden = !on;
+      sec.classList.toggle("is-first", on && first);
+      if (on) first = false;
+    }
+    const pane = els.settingsDialog.querySelector(".setpanes");
+    if (pane) pane.scrollTop = 0;
+    if (tab === "hand") renderStyles();
+  }
+  function openSettings(tab) {
+    const d = els.settingsDialog;
+    if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute("open", "");
+    showSettingsTab(tab || settingsTab);
   }
 
   /** The zoom knob reports the fitted value when auto-fit is on. */
@@ -2319,7 +2652,7 @@
           setStatus("Metronome " + (els.toggleMetronome.checked ? "on" : "off") + ".", "ok");
           return;
         case "KeyB": if (song) loopCurrentBar(); return;
-        case "KeyC": loopA=loopB=null; transport.clearLoop(); updateLoopInfo(); setStatus("Loop cleared.", "ok"); return;
+        case "KeyC": loopA=loopB=null; loopPass=0; transport.clearLoop(); updateLoopInfo(); setStatus("Repeat off.", "ok"); return;
         case "KeyZ": if (!e.repeat) shiftCompOctave(-1); return;
         case "KeyX": if (!e.repeat) shiftCompOctave(1); return;
       }
@@ -2369,6 +2702,7 @@
     roll.setRange(range.low, range.high); roll.resize();
 
     applyProfileToControls();
+    showHand();
 
     // restore view toggles / tempo / mode / hand
     const savedViews = await store.getSetting("views", null);
@@ -2464,7 +2798,7 @@
         const p = await store.get("pieces", lastId);
         if (p && p.content) {
           if (p.format === "midi") await loadMIDIBuffer(b64ToBuf(p.content), p.name, { id: p.id, store: false }, { parts: p.parts, fit: p.fit });
-          else await loadMusicXMLText(p.content, p.name, { id: p.id, store: false });
+          else await loadMusicXMLText(p.content, p.name, { id: p.id, store: false }, p.parts ? { parts: p.parts } : null);
           reopened = true;
         }
       }
@@ -2492,8 +2826,9 @@
     }
 
     if (!reopened) {
-      setStatus("Ready. Load a sample or open a MusicXML / MIDI file. Press ? for shortcuts.", "ok");
+      setStatus("Ready. Load a sample or open a MusicXML / MIDI file. Press ? for shortcuts.", "ok", { toast: false });
       if (els.firstRun) els.firstRun.classList.remove("is-hidden");
+      document.body.classList.add("is-empty");
     }
   }
 

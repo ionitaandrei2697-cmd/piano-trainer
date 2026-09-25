@@ -190,3 +190,100 @@ a quarter (so the labelling was inconsistent), and it competed with the
 fingering number for the same block. Verified: with the toggle on, 52 labels
 appear on the keys and the falling-notes canvas is byte-identical to the
 toggle-off state.
+
+---
+
+## Round 3 — the import error, fingering for your hand, the interface
+
+Reported: *"Error: given music sheet was incomplete or could not be loaded"*,
+often. That sentence is the notation library's (OSMD's) catch-all: it appears
+whenever its MusicXML reader throws, for any reason. So the method was to find
+every reason, not one:
+
+1. **Real scores from three corpora** through the app's own file input — OSMD's
+   test data (336 files), MuseScore's MusicXML import/export tests (447) and a
+   music21 subset (232: Bach, Beethoven, Mozart, Joplin, Schumann…).
+2. **Mutations**: 160 kinds of damage a hand-edited, converted or OCR'd score
+   carries (bad part lists, misplaced chord marks, invalid pitches, unended
+   lines, odd time signatures…), each applied to four scores — 647 files with
+   the encoding variants.
+3. **The app's own converter**: 1,600 random MIDI-like pieces and 60 random MIDI
+   files (tempo and meter changes, overlaps, 1-1,500 notes) through *Convert to
+   sheet music*, at every grid.
+
+The converter never failed. The failures all came from the score files:
+
+| # | Sev | Finding | How it was reproduced |
+|---|-----|---------|-----------------------|
+| 22 | S2 | **The reported error.** OSMD throws "incomplete" when a `<part>` has no `<score-part>` in the part list, when the ids disagree, when the part list is empty, or when a part has no bars — what a score with a deleted/hidden instrument, or a converted/hand-edited file, contains. | Mutations: all four scores, every one of these four faults → exactly this message. |
+| 23 | S2 | **UTF-16 scores could not be read.** Finale and older exporters write UTF-16; the app decoded everything as UTF-8. In `.mxl` form the app said *"doesn't contain a MusicXML score"*, as `.xml` OSMD said *"the document which was provided is invalid"*. | 42 of 232 music21 scores (18%); 5 of 447 MuseScore test files; 1 OSMD test file. |
+| 24 | S1 | **Silent loss of most of a score.** OSMD reads bars only while *every* part still has one, so a part shorter than the others ended the piece there — no error, just fewer notes (Ode to Joy with a one-bar extra part: 46 notes → 6). | Mutation, verified by note count. |
+| 25 | S3 | Crashes on content: `<chord/>` on a rest or on the first note after `<backup>` (`getHalfTone`), a step that is not A-G such as German "H" (`toLowerCase`), a time signature like "a/b" (VexFlow *Invalid time spec NaN/NaN*), an 8va that never ends (OSMD 1.9.9, `realValue`), `<divisions>` of 0, a note lasting 0, a part with no clef or divisions before its first note (`parent`). | Mutations; 2 MuseScore and 1 OSMD test file. |
+| 26 | S2 | Files were read by their extension: a zipped score saved as `.xml` (OSMD: *Invalid MXL file*), a MIDI file named `.musicxml`, a web page saved as `.xml` (a failed download) all ended in an engine error. | Built files. |
+| 27 | S2 | `score-timewise` (valid MusicXML) was rejected. | Built from a partwise score. |
+| 28 | S3 | **Multi-part scores gave the wrong hands.** Staff 0 was "the right hand" and every other staff "the left": in a song for voice and piano the vocal line became the right hand and *both* piano staves the left, so Wait mode demanded the melody and the whole accompaniment at once. A piano written as two one-staff parts ("Piano (right)" / "Piano (left)", the Clementi test file) had to keep both. | Built voice+piano score; Clementi from the OSMD corpus. |
+| 29 | S3 | Grace notes were filed at their main note's onset and became chord notes: Wait mode required the ornament and the note *together*. | Built score. |
+| 30 | S3 | **Hand size had no control in the page** (the README said to set it "in the profile"), and the model it drove was wrong: every span of Parncutt's table was multiplied by the size factor, so for a small hand fingers 3-4 on a whole step — a plain five-finger position — counted as a stretch, and simple melodies broke into jumps. | Method-book agreement for a hand that reaches an octave: **61.6%** (average hand 97.4%). |
+| 31 | S4 | Opening the same MusicXML file again created a new saved piece (id from the clock): duplicates in *Saved pieces*, and its fingering edits and best score were not found. | Code path; MIDI already used a content hash. |
+| 32 | S3 | `sheet-view` re-drew the cursor through `this.cursor`, which never existed: after a panel re-flow the cursor stayed at its old pixel position until playback next moved it. | Code path. |
+| 33 | S3 | A quick first tap before the audio had started: its release was handled before the note began, so the note then rang forever. | Code path (`ensureStarted().then(noteOn)` without a still-held check). |
+| 34 | S4 | The **C** shortcut cleared the repeat without resetting its pass counter. | Code path. |
+| 35 | S4 | The test suite ran only on its author's machine: 49 files hard-coded `/home/claude/…` and one Chrome binary; `round8.js` passed `?debug` to a harness that ignored it (it failed on the original build too); two `probe.js` checks still asserted behaviour the README had since changed on purpose. | Ran the suite here. |
+| 36 | S4 | A score with no playable notes was announced as "0 notes · C-1–C-1". | MuseScore test file. |
+
+**Fixes.** A new module, `src/score-import.js`, sits between the file and the
+notation engine: it decodes by byte-order mark, byte pattern and XML
+declaration (Windows-1252 for legacy 8-bit files); recognises zip, MIDI and RMI
+by their bytes; repairs the XML syntax faults a browser rejects; converts
+score-timewise; and makes the part list and the parts agree, pads short parts,
+supplies a missing clef or divisions, and repairs each crash above in place.
+What it changed is listed in the load message (and in *Settings → This piece*).
+If the engine still refuses a score, a simplified copy (notes, rests and
+structure only) is tried, and after that an independent reader opens the piece
+**as notes only** — falling notes, keyboard, scoring and every mode work, and
+*Make a simple score* re-engraves it — so a score is never simply refused.
+OSMD was updated from 1.9.9 to 2.1.3 (it no longer crashes on an unended 8va,
+and loads the test scores 1.6-2.7x faster in this app: Clementi op. 36/3
+1.3-1.5 s → 0.5-0.6 s).
+
+| Corpus | before | after |
+|---|---|---|
+| OSMD test data (336) | 334 | **336** |
+| MuseScore MusicXML tests (447) | 439 | **447** |
+| music21 subset (232) | 188 | **232** |
+| damaged / re-encoded files (647) | — | **645 with notation**; the MIDI file named `.musicxml` opens as MIDI; the web page gets a clear message |
+
+Of the 1,015 real scores, 999 open untouched and 16 with a repair — among them
+five Beethoven string quartets (UTF-16) that the renderer only draws in their
+simplified form. `tests/scoreimport.js` rebuilds 31 of the damaged cases from
+the bundled samples; the old build fails it. (One case, notes with a duration
+of 0, crashes OSMD 2.1.3 where 1.9.9 drew it; normalize() now derives the
+duration from the written note value.)
+
+**Fingering (30).** Hand size now scales only the stretch *beyond* a
+five-finger position (the keys are the same width for every hand). The hand is
+described as the widest thumb-to-little-finger interval, or a hand span in cm.
+Four styles are searched exactly and compared on the open piece — *Balanced*,
+*Stay in position* (stretch rather than move), *Relaxed hand* (never stretch),
+*Legato* (pass rather than lift) — with their shifts, passes and stretches;
+fast repeated notes change finger (3-2-1); chords wider than the hand are
+marked with an arpeggio sign. Method-book agreement for a hand that reaches an
+octave: 61.6% → **95.7%**; the average hand is unchanged (96.1% / 100%, the
+exact minimum of hand moves on all 13 melodies). `tests/fingervariants.js`.
+
+### Honest caveats
+
+- I could not see the files that produced the reported error, so which of
+  the causes in 22-27 was "often" for this user is inference. Every cause found
+  is fixed, and the fallback means an unknown one still opens the piece.
+- The cm → interval conversion (a white key is 2.35 cm, ~2 cm lost to the
+  fingertips) is a **rule of thumb**, not a measurement; the interval played at
+  the keyboard is the better input, and the page says so.
+- The repeated-note thresholds (one finger up to ~5 strokes a second, finger
+  changes from ~8) and the style suggested for a hand size are **rules of
+  thumb**; they choose between fingerings that are all valid, and can be
+  overridden per piece.
+- `round6.js` (dropdown option colours) fails on the original build as well;
+  `scorecheck.js` now counts the faded top of the next system as part of the
+  first at 1280x800 — the grand staff itself is fully visible (screenshot
+  checked).

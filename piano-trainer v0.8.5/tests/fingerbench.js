@@ -55,7 +55,7 @@ function score(fingerFn, label, set){
 }
 module.exports={BENCH,HELDOUT,score};
 if (require.main===module) {
-  const dir=process.argv[2]||"/home/claude/work/out/src/";
+  const dir=process.argv[2]||(require("path").join(__dirname,"..","src")+"/");
   globalThis.PT={keys:require(dir+"keys.js")};
   const F=require(dir+"fingering.js");
   score(F.fingerMonophonic, "TUNING SET — "+dir, BENCH);

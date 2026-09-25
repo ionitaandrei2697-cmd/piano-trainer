@@ -1,6 +1,6 @@
 // Every user-facing control, exercised through the UI, with its effect checked.
 const {open}=require("./harness");
-const ROOT=process.argv[2]||"/home/claude/work/out";
+const ROOT=process.argv[2]||require("path").join(__dirname,"..");
 (async()=>{
   const {pg,logs,close}=await open(ROOT,"?debug");
   await pg.setViewport({width:1440,height:900});
@@ -21,7 +21,7 @@ const ROOT=process.argv[2]||"/home/claude/work/out";
   let r=await E(()=>({t:document.getElementById("title").textContent,n:window.PT.__app.song.notes.length}));
   row("Load","Samples dropdown", r.n===40 && /Minuet/.test(r.t), r.t);
   const inp=await pg.$("#fileInput");
-  await inp.uploadFile("/home/claude/work/t/fixtures/sweep.mid"); await sleep(1500);
+  await inp.uploadFile(require("path").join(__dirname,"fixtures","sweep.mid")); await sleep(1500);
   r=await E(()=>({noSheet:!document.getElementById("noSheet").classList.contains("is-hidden"),
                   hands:[...new Set(window.PT.__app.song.notes.map(n=>n.staff))].sort().join(",")}));
   row("Load","Open file: .mid", r.noSheet, "no-sheet panel shown");
@@ -29,7 +29,7 @@ const ROOT=process.argv[2]||"/home/claude/work/out";
   r=await E(async()=>{document.getElementById("btnConvertSheet").click(); await new Promise(r=>setTimeout(r,3000));
     return {sheet:!!document.querySelector("#sheetContainer svg g.vf-stavenote"), status:document.getElementById("status").textContent};});
   row("Load","Convert MIDI to sheet", r.sheet && /Converted/.test(r.status), r.status.slice(0,40));
-  await inp.uploadFile("/home/claude/work/t/fixtures/ode.mxl"); await sleep(3000);
+  await inp.uploadFile(require("path").join(__dirname,"fixtures","ode.mxl")); await sleep(3000);
   r=await E(()=>document.getElementById("title").textContent);
   row("Load","Open file: .mxl", /Ode/.test(r), r);
   r=await E(async()=>{

@@ -2,7 +2,7 @@
  * Wait-mode gate, and the voice look-ahead never crosses them either. The real
  * Transport is driven with a fake audio clock that records every event. */
 globalThis.window = globalThis;
-require("/home/claude/work/out/src/transport.js");
+require(require("path").join(__dirname,"..","src","transport.js"));
 const T = globalThis.PT.Transport;
 let pass=0, fail=0; const chk=(n,ok,x)=>{ok?pass++:fail++;console.log((ok?"  PASS  ":"  FAIL  ")+n+(!ok&&x!==undefined?"  <- "+JSON.stringify(x):""));};
 function rig(){

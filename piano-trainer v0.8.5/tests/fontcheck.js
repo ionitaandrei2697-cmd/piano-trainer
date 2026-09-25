@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,close}=await open("/home/claude/work/out");
+  const {pg,close}=await open(require("path").join(__dirname,".."));
   await pg.setViewport({width:1200,height:820,deviceScaleFactor:1});
   const out=await pg.evaluate(async()=>{
     await new Promise(r=>setTimeout(r,800));
@@ -26,7 +26,7 @@ const {open}=require("./harness");
   console.log("data     declared="+out.monoDeclared+"px fallback="+out.monoFallback+"px ->", out.monoDeclared===out.monoFallback?"using the FALLBACK mono (graceful)":"using IBM Plex Mono");
   await pg.evaluate(async()=>{const s=document.getElementById("sampleList");s.value="minuetG";s.dispatchEvent(new Event("change"));await new Promise(r=>setTimeout(r,3000));
     const sc=document.getElementById("scrubber");sc.value="2.2";sc.dispatchEvent(new Event("change"));await new Promise(r=>setTimeout(r,400));});
-  await pg.screenshot({path:"/home/claude/work/t/theme.png"});
+  await pg.screenshot({path:require("path").join(require("os").tmpdir(),"theme.png")});
   console.log("screenshot saved");
   await close(); process.exit(0);
 })();

@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,close}=await open("/home/claude/work/out");
+  const {pg,close}=await open(require("path").join(__dirname,".."));
   await pg.setViewport({width:1440,height:1000});
   const out=await pg.evaluate(async()=>{
     const s=document.getElementById("sampleList"); s.value="minuetG"; s.dispatchEvent(new Event("change"));

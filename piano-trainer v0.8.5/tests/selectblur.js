@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,close}=await open(process.argv[2]||"/home/claude/work/out");
+  const {pg,close}=await open(process.argv[2]||require("path").join(__dirname,".."));
   await pg.setViewport({width:1440,height:830});
   const out={};
   for (const id of ["sampleList","pieceList"]) {

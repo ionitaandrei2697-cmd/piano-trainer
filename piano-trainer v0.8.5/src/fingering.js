@@ -47,7 +47,25 @@
 (function (root) {
   "use strict";
 
-  const HAND_SCALE = { XS: 0.8, S: 0.9, M: 1.0, L: 1.12, XL: 1.25 };
+  // HAND SIZE. Parncutt's table describes an average adult hand, whose widest
+  // thumb-to-little-finger stretch (MaxPrac of the 1-5 pair) is 15 semitones
+  // — between a ninth and a tenth. A player describes their own hand the way
+  // teachers ask for it: "I can reach an octave / a ninth / a tenth" (1 to 5,
+  // stretched). The presets are the same idea, in semitones.
+  const AVERAGE_REACH = 15;
+  const FIVE_FINGER_REACH = 7;          // a five-finger position, C to G: every hand has it
+  const HAND_REACH = { XS: 12, S: 13.5, M: 15, L: 16.5, XL: 18 };
+  /**
+   * The STRETCH factor of a hand: 1 for the average hand, 0 for a hand that
+   * can span a five-finger position and nothing wider. (See lim(): hand size
+   * scales how far a hand stretches BEYOND a five-finger position.)
+   * size: "XS".."XL" | { reach: semitones } | a number (the factor itself)
+   */
+  function scaleOf(size) {
+    if (typeof size === "number" && size > 0) return size;
+    const reach = size && typeof size === "object" && size.reach > 0 ? size.reach : (HAND_REACH[size] || AVERAGE_REACH);
+    return Math.max(0.1, (reach - FIVE_FINGER_REACH) / (AVERAGE_REACH - FIVE_FINGER_REACH));
+  }
 
   // Parncutt et al. (1997), Table 1 — right hand, semitones. For a pair f-g
   // (f < g) the value is the interval from f's note up to g's note; negative
@@ -66,6 +84,44 @@
     "4-5": [ 1,  1, 1,  2,  3,  5],
   };
   const MIN_PRAC = 0, MIN_COMF = 1, MIN_REL = 2, MAX_REL = 3, MAX_COMF = 4, MAX_PRAC = 5;
+  for (const k in SPAN) Object.defineProperty(SPAN[k], "key", { value: k });
+  /*
+   * One limit of the table for a hand of a given size.
+   *
+   * The table used to be multiplied through by a size factor (0.8 for a
+   * small hand). That shrank every span, including the ones no hand can
+   * shrink: fingers 3 and 4 on neighbouring white keys (a whole step, 2
+   * semitones) came out as "beyond comfortable" for a small hand, so a plain
+   * five-finger position counted as a stretch and the search broke simple
+   * melodies into jumps. Measured on the textbook set with a hand that
+   * reaches an octave: 61.6% agreement with the method-book fingerings,
+   * against 97.4% for the average hand. (The setting had no control in the
+   * page, so nobody could see it.)
+   *
+   * The keys are the same width for every hand, so what size changes is the
+   * STRETCH beyond a five-finger position. Each maximum is split into the
+   * five-finger distance of that finger pair — the wider of the major and the
+   * minor pentachord (C-D-E-F-G / C-D-Eb-F-G), which every hand plays — and
+   * the part beyond it, which scales with the hand. Positive minima
+   * (how close two fingers can sit) are set by the key width and don't
+   * scale; negative minima — how far the thumb reaches when it crosses —
+   * scale with the whole hand. At scale 1 this is exactly the published table.
+   */
+  const FIVE_FINGER = { "1-2": 2, "1-3": 4, "1-4": 5, "1-5": 7, "2-3": 2, "2-4": 3, "2-5": 5, "3-4": 2, "3-5": 4, "4-5": 2 };
+  function lim(L, k, scale) {
+    const v = L[k];
+    if (k === MIN_PRAC || k === MIN_COMF) {
+      if (v >= 0) return v;
+      return v * (FIVE_FINGER_REACH + (AVERAGE_REACH - FIVE_FINGER_REACH) * scale) / AVERAGE_REACH;
+    }
+    if (k === MIN_REL) return v;
+    const floor = FIVE_FINGER[L.key] != null ? Math.min(v, FIVE_FINGER[L.key]) : 0;
+    return floor + (v - floor) * scale;
+  }
+  // Which limit bounds a hand POSITION (see fingerHand): the comfortable
+  // span (default), the relaxed one (never stretch: more position changes),
+  // or the practical one (stretch rather than move).
+  const FRAME_MAX = { rel: MAX_REL, comf: MAX_COMF, prac: MAX_PRAC };
   const REST_RELIEF = 0.35;   // cost multiplier for a transition across a rest
   // Hand position. Parncutt's rules judge finger PAIRS and triples, but not
   // where the hand as a whole sits — the class of error Nakamura et al. (2020)
@@ -108,7 +164,7 @@
     const d = hi[0] - lo[0];
     if (d <= 0) return false;
     const L = SPAN[lo[1] + "-" + hi[1]];
-    return d >= L[MIN_COMF] * scale && d <= L[MAX_COMF] * scale;
+    return d >= lim(L, MIN_COMF, scale) && d <= lim(L, MAX_COMF, scale);
   }
   function whiteIndex(p) { return Math.floor(p / 12) * 7 + WHITE_INDEX[((p % 12) + 12) % 12]; }
 
@@ -124,7 +180,7 @@
     if (f1 === f2) return p1 === p2 ? 0 : 10 + 2 * Math.abs(p2 - p1);   // one finger, two keys: a jump
     const { key, d } = pairOf(f1, p1, f2, p2);
     const L = SPAN[key];
-    const lim = (k) => L[k] * scale;
+    const lm = (k) => lim(L, k, scale);
     const thumb = f1 === 1 || f2 === 1;
     const w = thumb ? 1 : 2;                 // Jacobs: non-thumb pairs cost double
     // A thumb PASS (crossed pair) is a lateral movement of the whole hand, not a
@@ -136,11 +192,11 @@
     const crossed = thumb && d < 0;
     let c = 0;
     if (!crossed) {
-      if (d < lim(MIN_PRAC)) c += 10 * (lim(MIN_PRAC) - d); else if (d > lim(MAX_PRAC)) c += 10 * (d - lim(MAX_PRAC));
+      if (d < lm(MIN_PRAC)) c += 10 * (lm(MIN_PRAC) - d); else if (d > lm(MAX_PRAC)) c += 10 * (d - lm(MAX_PRAC));
     }
     const sw = crossed ? 1 : 2;
-    if (d < lim(MIN_COMF)) c += sw * (lim(MIN_COMF) - d);  else if (d > lim(MAX_COMF)) c += sw * (d - lim(MAX_COMF));
-    if (d < lim(MIN_REL))  c += w * (lim(MIN_REL) - d);   else if (d > lim(MAX_REL))  c += w * (d - lim(MAX_REL));
+    if (d < lm(MIN_COMF)) c += sw * (lm(MIN_COMF) - d);  else if (d > lm(MAX_COMF)) c += sw * (d - lm(MAX_COMF));
+    if (d < lm(MIN_REL))  c += w * (lm(MIN_REL) - d);   else if (d > lm(MAX_REL))  c += w * (d - lm(MAX_REL));
     return c;
   }
 
@@ -185,12 +241,12 @@
     } else {
       const { key, d } = pairOf(a, p0, c, p2);
       const L = SPAN[key];
-      const lo = L[MIN_COMF] * scale, hi = L[MAX_COMF] * scale;
+      const lo = lim(L, MIN_COMF, scale), hi = lim(L, MAX_COMF, scale);
       if (d < lo || d > hi) {
         // position-change-count: full change (2) when the thumb is the pivot
         // between the outer notes and the span is beyond practical; else half (1)
         const between = (p1 - p0) * (p1 - p2) < 0;
-        const outPrac = d < L[MIN_PRAC] * scale || d > L[MAX_PRAC] * scale;
+        const outPrac = d < lim(L, MIN_PRAC, scale) || d > lim(L, MAX_PRAC, scale);
         cost += (b === 1 && between && outPrac) ? 2 : 1;
         cost += d < lo ? (lo - d) : (d - hi);    // position-change-size
       }
@@ -220,7 +276,7 @@
     const n = pitches.length;
     if (n === 0) return [];
     opts = opts || {};
-    const scale = HAND_SCALE[size] || 1.0;
+    const scale = scaleOf(size);
     const P = hand === "left" ? pitches.map((p) => -p) : pitches.slice();   // mirror the left hand
     const K = pitches.map(isBlackKey);
     const W = pitches.map(whiteIndex);            // implied thumb = W - sign*(finger-1)
@@ -336,19 +392,38 @@
     return Math.max(0, Math.min(1, (7 - d) / 5));   // 1 up to a second, 0 from a fifth
   }
   const PASS_REACH = 7;                             // semitones: a thumb pass reaches up to a fifth (arpeggios)
+  // FAST REPEATED NOTES. One finger can re-strike a key only so fast; past
+  // that, pianists change finger on every stroke (3-2-1, 4-3-2-1 — towards
+  // the thumb). The thresholds are a rule of thumb, not a measurement: a
+  // single finger is comfortable down to ~0.2 s between strokes (5 per
+  // second) and is replaced for anything at 0.12 s or faster (8+ per second);
+  // between the two the choice fades from one to the other. A finger change
+  // on the same key at that speed is technique, not a change of position,
+  // so it is never counted as a move.
+  const REP_SLOW = 0.2, REP_FAST = 0.12;
+  function repFastness(ioi) {
+    if (ioi == null) return 0;
+    return Math.max(0, Math.min(1, (REP_SLOW - ioi) / (REP_SLOW - REP_FAST)));
+  }
+  const REP_SAME = 2.5;                             // one finger re-striking at full speed
+  function alternationCost(prev, next) {            // towards the thumb is the natural cycle
+    if (next === prev - 1) return 0.2;
+    if (prev <= 2 && (next === 3 || next === 4)) return 0.4;   // start the cycle again
+    return 1.2;
+  }
   function isThumbPass(f1, p1, f2, p2) {            // right-hand space, consecutive notes
     if (f1 === f2 || (f1 !== 1 && f2 !== 1) || p1 === p2) return false;
     const { d } = pairOf(f1, p1, f2, p2);
     return d < 0 && -d <= PASS_REACH && f1 !== 5 && f2 !== 5;
   }
-  function spanOK(k1, f1, k2, f2, scale) {          // right-hand space, k1 < k2
+  function spanOK(k1, f1, k2, f2, scale, frame) {   // right-hand space, k1 < k2
     if (f1 >= f2) return false;
     const L = SPAN[f1 + "-" + f2];
     const d = k2 - k1;
-    return d >= L[MIN_COMF] * scale && d <= L[MAX_COMF] * scale;
+    return d >= lim(L, MIN_COMF, scale) && d <= lim(L, FRAME_MAX[frame] || MAX_COMF, scale);
   }
   /** All ways to give the keys `free` fingers, consistent with `fixed` (sorted pairs [key, finger]). */
-  function extendMap(fixed, free, pins, scale) {
+  function extendMap(fixed, free, pins, scale, frame) {
     const keys = [...fixed.map((x) => x[0]), ...free].sort((a, b) => a - b);
     if (keys.length > 5) return [];
     const fixedF = new Map(fixed);
@@ -358,7 +433,7 @@
       if (i === keys.length) {
         const pairs = keys.map((k, j) => [k, cur[j]]);
         for (let a = 0; a < pairs.length; a++) for (let b = a + 1; b < pairs.length; b++) {
-          if (!spanOK(pairs[a][0], pairs[a][1], pairs[b][0], pairs[b][1], scale)) return;
+          if (!spanOK(pairs[a][0], pairs[a][1], pairs[b][0], pairs[b][1], scale, frame)) return;
         }
         out.push(pairs);
         return;
@@ -385,8 +460,9 @@
   function fingerHand(onsets, hand, size, opts) {
     opts = opts || {};
     const n = onsets.length;
-    if (!n) return { fingers: [], moves: [] };
-    const scale = HAND_SCALE[size] || 1.0;
+    if (!n) return { fingers: [], moves: [], jumps: [], alts: [], changes: 0, cost: 0 };
+    const scale = scaleOf(size);
+    const frame = opts.frame || "comf";
     const sg = hand === "left" ? -1 : 1;
     const O = onsets.map((o) => {
       const keys = [...new Set(o.keys)].map((k) => sg * k).sort((a, b) => a - b);
@@ -409,9 +485,12 @@
       for (let j = 1; j < fs.length; j++) c += spanCost(fs[j - 1], O[i].keys[j - 1], fs[j], O[i].keys[j], scale);
       return c;
     };
+    // a single key struck again, right after itself
+    const repeated = (i) => i >= 1 && O[i].keys.length === 1 && O[i - 1].keys.length === 1 && O[i].keys[0] === O[i - 1].keys[0];
     const stepCost = (m, i, fa2, fa1, jumped) => {
       const fb = repFinger(m, i);
       let c = singleCost(fb, i, K) + shapeCost(m, i);
+      if (!jumped && fb === fa1 && repeated(i)) c += REP_SAME * repFastness(ioi[i]);
       if (jumped) {
         // The hand lifts: the pair and triple rules describe fingers reaching
         // from key to key WITHOUT moving the hand (a legato connection), which
@@ -432,7 +511,7 @@
     // a fresh position for onset i; if none is comfortable (a very wide chord),
     // fall back to the chord-shape heuristic rather than give up
     const fresh = (i) => {
-      const f = extendMap([], O[i].keys, O[i].pins, scale);
+      const f = extendMap([], O[i].keys, O[i].pins, scale, frame);
       if (f.length) return f;
       const cf = fingerChord(O[i].keys.map((k) => sg * k), hand, size);
       return [O[i].keys.map((k, j) => [k, O[i].pins.get(k) || cf[j]])];
@@ -455,8 +534,16 @@
         const have = new Set(s.m.map((x) => x[0]));
         const free = O[i].keys.filter((k) => !have.has(k));
         const pinClash = O[i].keys.some((k) => O[i].pins.has(k) && have.has(k) && s.m.find((x) => x[0] === k)[1] !== O[i].pins.get(k));
-        if (!pinClash) for (const m of extendMap(s.m, free, O[i].pins, scale)) {
+        if (!pinClash) for (const m of extendMap(s.m, free, O[i].pins, scale, frame)) {
           push({ m, fa2: s.fa1, fa1: repFinger(m, i), c: s.c, v: s.v + stepCost(m, i, s.fa2, s.fa1), prev: s, moved: false });
+        }
+        // a fast repeated note may change finger on the key (3-2-1) — the hand
+        // stays where it is, so this is neither a jump nor a pass
+        if (repeated(i) && repFastness(ioi[i]) > 0) for (const m of freshI) {
+          const fb = repFinger(m, i);
+          if (fb === s.fa1) continue;
+          const v = s.v + singleCost(fb, i, K) + alternationCost(s.fa1, fb) + 3 * (1 - repFastness(ioi[i]));
+          push({ m, fa2: 0, fa1: fb, c: s.c, v, prev: s, moved: false, alt: true });
         }
         // move to a fresh position: a thumb pass (glide, no jump) or a jump.
         // Only tried from states within one jump of the best — a state further
@@ -482,12 +569,32 @@
     }
     let best = null;
     for (const s of states.values()) if (better(s, best)) best = s;
-    const fingers = new Array(n), moves = new Array(n), jumps = new Array(n);
+    const fingers = new Array(n), moves = new Array(n), jumps = new Array(n), alts = new Array(n);
     for (let i = n - 1, s = best; i >= 0; i--, s = s.prev) {
       const m = new Map(); for (const [k, f] of s.m) m.set(sg * k, f);
-      fingers[i] = m; moves[i] = s.moved; jumps[i] = !!s.jump;
+      fingers[i] = m; moves[i] = s.moved; jumps[i] = !!s.jump; alts[i] = !!s.alt;
     }
-    return { fingers, moves, jumps, changes: best.c, cost: best.v, beamHit, maxStates };
+    // STRETCHES: where the chosen fingering goes past the comfortable span of
+    // a finger pair — inside a chord, or from one note of the line to the
+    // next without the hand moving. What a bigger hand does easily and a
+    // smaller one should avoid, so it is reported per variant.
+    let stretches = 0;
+    const beyond = (f1, p1, f2, p2) => {
+      if (f1 === f2) return false;
+      const { key, d } = pairOf(f1, p1, f2, p2);
+      const L = SPAN[key];
+      return d > lim(L, MAX_COMF, scale) + 1e-9;
+    };
+    for (let i = 0; i < n; i++) {
+      const keys = O[i].keys;
+      const fm = fingers[i];
+      for (let j = 1; j < keys.length; j++) if (beyond(fm.get(sg * keys[j - 1]), keys[j - 1], fm.get(sg * keys[j]), keys[j])) { stretches++; break; }
+      if (i >= 1 && !jumps[i] && !alts[i] && !moves[i]) {
+        const a = fingers[i - 1].get(sg * P[i - 1]), b = fm.get(sg * P[i]);
+        if (a && b && beyond(a, P[i - 1], b, P[i])) stretches++;
+      }
+    }
+    return { fingers, moves, jumps, alts, stretches, changes: best.c, cost: best.v, beamHit, maxStates };
   }
 
   /** Monophonic convenience wrapper (tests, benchmark): one note per onset. */
@@ -517,7 +624,6 @@
    * C-E-G -> 1,3,5 · C-D-E -> 1,2,3 · C-E-G-C -> 1,2,4,5.
    */
   function fingerChord(pitches, hand, size) {
-    const scale = HAND_SCALE[size] || 1.0;
     const n = pitches.length;
     const idx = pitches.map((p, i) => i).sort((a, b) => pitches[a] - pitches[b]);
     const order = hand === "right" ? idx : idx.slice().reverse(); // thumb side first
@@ -535,7 +641,9 @@
     // 1–5 is the NORMAL hand frame, not a stretch), and inner notes sit at
     // their proportional position inside that frame. Narrower chords place
     // each finger by its natural distance from the thumb.
-    const pinkyAnchored = spanTotal >= 7 * scale - 1e-9;
+    // (the natural distances are those of a hand resting on a five-finger
+    // position, which every hand has — see lim() — so they don't scale)
+    const pinkyAnchored = spanTotal >= 7 - 1e-9;
 
     fingers[order[0]] = 1;
     let prev = 1;
@@ -556,7 +664,7 @@
         best = maxF;
         for (let f = minF; f <= maxF; f++) {
           // Stretching past the natural span is easier than cramping under it.
-          const nat = NATURAL_FROM_THUMB[f] * scale;
+          const nat = NATURAL_FROM_THUMB[f];
           const d = dist >= nat ? (dist - nat) * 0.8 : (nat - dist) * 1.2;
           if (d < bestD) { bestD = d; best = f; }
         }
@@ -567,72 +675,141 @@
     return fingers;
   }
 
+  /*
+   * VARIANTS. There is no single right fingering, and much of the choice is
+   * about the hand: a large hand stretches where a small one has to move.
+   * Each variant is the same exact search with a different definition of
+   * "one hand position" and a different price on a jump:
+   *   balanced  a position spans the COMFORTABLE reach of each finger pair;
+   *             fewest moves (2 x jumps + thumb passes), then comfort.
+   *   compact   a position may stretch to the PRACTICAL reach: fewer moves,
+   *             more stretches — for a hand that stretches easily.
+   *   relaxed   a position never goes past the RELAXED reach: no stretching,
+   *             the hand moves (passes, jumps) more often instead.
+   *   legato    as balanced, but a jump costs three thumb passes instead of
+   *             two, so the line is joined by passing under/over wherever a
+   *             pass can do the job of a lift.
+   */
+  const STRATEGIES = {
+    balanced: { frame: "comf", jumpW: 2 },
+    compact:  { frame: "prac", jumpW: 2 },
+    relaxed:  { frame: "rel",  jumpW: 2 },
+    legato:   { frame: "comf", jumpW: 3 },
+  };
+  /** How far a hand spans, thumb to little finger, in semitones. */
+  function handReach(size) {
+    const sc = scaleOf(size);
+    return { practical: lim(SPAN["1-5"], MAX_PRAC, sc), comfortable: lim(SPAN["1-5"], MAX_COMF, sc) };
+  }
+  /** The variant that suits a hand, as a starting point (a rule of thumb). */
+  function suggestedStrategy(size) {
+    const sc = scaleOf(size);
+    if (sc <= 0.7) return "relaxed";      // reaches about an octave or less
+    if (sc >= 1.1) return "compact";      // reaches a tenth or more
+    return "balanced";
+  }
+
+  /** Group one hand's notes into onsets with the timing context the search needs. */
+  function handOnsets(handNotes, hand, userPins) {
+    const groups = new Map();
+    for (const nn of handNotes) {
+      const key = Math.round(nn.startSec * 1000);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(nn);
+    }
+    const onsetKeys = [...groups.keys()].sort((a, b) => a - b);
+    const onsets = [], relief = [], ioi = [];
+    let prevEnd = null, prevStart = null;
+    for (const k of onsetKeys) {
+      const g = groups.get(k);
+      const pitches = g.map((x) => x.midi);
+      const rep = hand === "right" ? Math.max(...pitches) : Math.min(...pitches);
+      const pins = new Map();
+      for (const nn of g) if (userPins && userPins.has(nn.id)) pins.set(nn.midi, userPins.get(nn.id));
+      onsets.push({ keys: pitches, rep, pins });
+      const start = g[0].startSec;
+      relief.push(prevEnd != null && start - prevEnd > 0.12 ? REST_RELIEF : 1);
+      ioi.push(prevStart == null ? null : start - prevStart);
+      prevStart = start;
+      prevEnd = Math.max(...g.map((x) => x.startSec + (x.durSec || 0)));
+    }
+    return { groups, onsetKeys, onsets, relief, ioi };
+  }
+
   /**
    * Annotate a parsed song's notes with `.finger`.
-   * Notes are grouped per hand and per onset. The top (right hand) or bottom
-   * (left hand) note of each onset forms the melodic line the Viterbi search
-   * fingers; chords get their shape from fingerChord, and the line is pinned to
-   * the chord's outer finger so the two agree. Rests between onsets relax the
-   * transition costs across them.
+   * Notes are grouped per hand and per onset; the search fingers every onset
+   * of a hand at once (chords and the melodic line together). Rests between
+   * onsets relax the transition costs across them.
    *
    * @param {object} song   from parser.js (notes have id, midi, startSec, durSec, staff)
-   * @param {string} [size] hand size XS..XL (default "M")
-   * @param {object} [opts] { pins: Map(noteId -> finger) } — fixed fingers
-   *                        (the player's edits); everything else re-optimises
-   *                        around them.
+   * @param {string|number|object} [size] hand: "XS".."XL", a scale, or { reach: semitones 1-5 }
+   * @param {object} [opts] { pins: Map(noteId -> finger), strategy: "balanced" | "compact" | "relaxed" | "legato" }
+   * Sets on each note: finger, pinned, handMove ("jump" | "pass" | "alt" | null)
+   * and wide (the chord is wider than this hand can hold: roll it or share it).
+   * Sets song.fingerStats = { strategy, jumps, passes, alternations, stretches, wideChords }.
    */
   function annotate(song, size, opts) {
     size = size || "M";
     opts = opts || {};
     const userPins = opts.pins || new Map();
+    const strategy = STRATEGIES[opts.strategy] ? opts.strategy : "balanced";
+    const S = STRATEGIES[strategy];
+    const scale = scaleOf(size);
     if (!song || !song.notes || !song.notes.length) return song;
     let totalMoves = 0;
-    for (const nn of song.notes) if (nn.backing || nn.unreachable) { nn.finger = null; nn.handMove = null; nn.pinned = false; }
+    const stats = { strategy, jumps: 0, passes: 0, alternations: 0, stretches: 0, wideChords: 0 };
+    for (const nn of song.notes) if (nn.backing || nn.unreachable) { nn.finger = null; nn.handMove = null; nn.pinned = false; nn.wide = false; }
+    // the widest chord a hand can hold at all: the practical 1-5 stretch
+    const reach = lim(SPAN["1-5"], MAX_PRAC, scale);
 
     for (const hand of ["right", "left"]) {
-      const staffMatch = hand === "right" ? (s) => s === 0 : (s) => s >= 1;
+      const staffMatch = hand === "right" ? (st) => st === 0 : (st) => st >= 1;
       const handNotes = song.notes.filter((nn) => !nn.backing && !nn.unreachable && staffMatch(nn.staff));   // not played by you
       if (!handNotes.length) continue;
-
-      const groups = new Map();
-      for (const nn of handNotes) {
-        const key = Math.round(nn.startSec * 1000);
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(nn);
-      }
-      const onsetKeys = [...groups.keys()].sort((a, b) => a - b);
-      const onsets = [], relief = [], ioi = [];
-      let prevEnd = null, prevStart = null;
-      for (const k of onsetKeys) {
-        const g = groups.get(k);
-        const pitches = g.map((x) => x.midi);
-        const rep = hand === "right" ? Math.max(...pitches) : Math.min(...pitches);
-        const pins = new Map();
-        for (const nn of g) if (userPins.has(nn.id)) pins.set(nn.midi, userPins.get(nn.id));
-        onsets.push({ keys: pitches, rep, pins });
-        const start = g[0].startSec;
-        relief.push(prevEnd != null && start - prevEnd > 0.12 ? REST_RELIEF : 1);
-        ioi.push(prevStart == null ? null : start - prevStart);
-        prevStart = start;
-        prevEnd = Math.max(...g.map((x) => x.startSec + (x.durSec || 0)));
-      }
-      const res = fingerHand(onsets, hand, size, { relief, ioi });
+      const { groups, onsetKeys, onsets, relief, ioi } = handOnsets(handNotes, hand, userPins);
+      const res = fingerHand(onsets, hand, size, { relief, ioi, frame: S.frame, jumpW: S.jumpW });
       onsetKeys.forEach((k, gi) => {
         const rep = onsets[gi].rep;
-        for (const nn of groups.get(k)) {
+        const g = groups.get(k);
+        const lo = Math.min(...g.map((x) => x.midi)), hi = Math.max(...g.map((x) => x.midi));
+        const wide = hi - lo > reach + 1e-9;
+        if (wide) stats.wideChords++;
+        for (const nn of g) {
           nn.finger = res.fingers[gi].get(nn.midi);
           nn.pinned = userPins.has(nn.id);          // the player's own finger, not a suggestion
+          nn.wide = wide;
           // how the hand moves here — marked once per chord, on its outer note
-          nn.handMove = nn.midi !== rep ? null : res.jumps[gi] ? "jump" : (res.moves[gi] ? "pass" : null);
+          nn.handMove = nn.midi !== rep ? null : res.jumps[gi] ? "jump" : res.moves[gi] ? "pass" : res.alts[gi] ? "alt" : null;
         }
+        if (res.jumps[gi]) stats.jumps++; else if (res.moves[gi]) stats.passes++;
+        if (res.alts[gi]) stats.alternations++;
       });
+      stats.stretches += res.stretches;
       totalMoves += res.changes;
     }
     song.handMoves = totalMoves;
+    song.fingerStats = stats;
     return song;
   }
 
-  const api = { annotate, fingerHand, isThumbPass, fingerMonophonic, fingerMonophonicWindowed, fingerChord, transitionCost, samePosition, SPAN };
+  /**
+   * Every variant for this hand, measured on the piece without touching it.
+   * @returns {Array<{ strategy, jumps, passes, alternations, stretches, wideChords, suggested }>}
+   */
+  function variants(song, size, opts) {
+    opts = opts || {};
+    const out = [];
+    const suggested = suggestedStrategy(size);
+    for (const name of Object.keys(STRATEGIES)) {
+      const copy = { notes: song.notes.map((n) => ({ id: n.id, midi: n.midi, startSec: n.startSec, durSec: n.durSec, staff: n.staff, backing: n.backing, unreachable: n.unreachable })) };
+      annotate(copy, size, { pins: opts.pins, strategy: name });
+      out.push(Object.assign({}, copy.fingerStats, { suggested: name === suggested }));
+    }
+    return out;
+  }
+
+  const api = { annotate, variants, STRATEGIES, suggestedStrategy, scaleOf, handReach, AVERAGE_REACH, HAND_REACH, fingerHand, isThumbPass, fingerMonophonic, fingerMonophonicWindowed, fingerChord, transitionCost, samePosition, SPAN };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else { root.PT = root.PT || {}; root.PT.fingering = api; }

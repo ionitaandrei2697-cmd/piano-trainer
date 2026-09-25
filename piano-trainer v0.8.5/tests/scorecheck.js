@@ -1,5 +1,5 @@
 const {open}=require("./harness");
-const ROOT=process.argv[2]||"/home/claude/work/out";
+const ROOT=process.argv[2]||require("path").join(__dirname,"..");
 (async()=>{
   const {pg,close}=await open(ROOT);
   for (const [w,h] of [[1440,900],[1280,800],[1512,982],[1024,768]]) {

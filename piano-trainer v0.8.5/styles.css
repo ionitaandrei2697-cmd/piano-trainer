@@ -358,6 +358,13 @@ select option:disabled { color: var(--fg-faint); }
   border: 1px solid #0a0f18;
   box-shadow: var(--lift-3), 0 0 0 1px rgba(241,236,226,.06);
 }
+/* a system cut off at the bottom of the panel fades out instead of ending in
+   a hard slice of stems and beams */
+.paper::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 22px; z-index: 2;
+  background: linear-gradient(180deg, rgba(233,226,212,0), var(--ivory-warm));
+  pointer-events: none;
+}
 /* a gilt hairline along the top edge — the stamped rule of an edition page */
 .paper::before {
   content: ""; position: absolute; inset: 0 0 auto; height: 2px; z-index: 2;
@@ -415,19 +422,54 @@ select option:disabled { color: var(--fg-faint); }
 .is-hidden { display: none !important; }
 
 /* --- empty / no-notation states --- */
-.nosheet, .firstrun {
+.nosheet {
   display: grid; place-items: center; border-radius: var(--r-lg);
-  border: 1px dashed var(--rule); background: var(--ink-raise);
-  min-height: 140px; padding: 26px;
+  border: 1px dashed var(--rule); min-height: 140px; padding: 26px;
+  background: repeating-linear-gradient(135deg, var(--ink-raise) 0 16px, #121a27 16px 32px);
 }
-.nosheet { background: repeating-linear-gradient(135deg, var(--ink-raise) 0 16px, #121a27 16px 32px); }
-.nosheet__inner, .firstrun__inner { text-align: center; max-width: 540px; }
-.nosheet__inner h2, .firstrun__inner h2 {
+.nosheet__inner { text-align: center; max-width: 560px; }
+.nosheet__inner h2 {
   font-family: var(--display); font-weight: 500; font-size: 21px;
   margin: 0 0 9px; color: var(--fg); letter-spacing: -.01em;
 }
-.nosheet__inner p, .firstrun__inner p { margin: 0; color: var(--fg-dim); line-height: 1.6; font-size: 13.5px; }
+.nosheet__inner p { margin: 0; color: var(--fg-dim); line-height: 1.6; font-size: 13.5px; }
 .nosheet__actions { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+
+/* THE EMPTY STATE IS THE PAGE. It used to be a dashed card stacked ABOVE an
+   empty ivory panel, so the first screen showed a blank page under a card.
+   It now sits on the page itself, where the score is about to appear, set
+   like an edition's title page: ink on ivory. */
+.firstrun {
+  position: absolute; inset: 0; z-index: 3;
+  display: grid; place-items: center; padding: 22px;
+}
+.firstrun__inner { text-align: center; max-width: 560px; color: var(--page-ink); }
+.firstrun__kicker {
+  margin: 0 0 8px !important; font: 600 10px var(--ui) !important; letter-spacing: .22em;
+  text-transform: uppercase; color: #8d6a2c !important;
+}
+.firstrun__inner h2 {
+  font-family: var(--display); font-weight: 500; font-size: 30px;
+  margin: 0 0 10px; color: var(--page-ink); letter-spacing: -.018em;
+}
+.firstrun__inner p { margin: 0; color: #4a5160; line-height: 1.6; font-size: 14px; }
+.firstrun__hint { margin-top: 14px !important; font-family: var(--display); font-style: italic; font-size: 13px !important; color: #6b6557 !important; }
+.btn--paper {
+  background: transparent; color: var(--page-ink); border-color: #b9ad97;
+}
+.btn--paper:hover:not(:disabled) { background: rgba(23,29,41,.05); border-color: #8f846f; }
+.btn--ink {
+  background: linear-gradient(180deg, #1b2436, #111827); color: var(--ivory); border-color: #0b1018;
+  font-weight: 600; box-shadow: 0 10px 22px -14px rgba(10,14,22,.9);
+}
+.btn--ink:hover:not(:disabled) { background: linear-gradient(180deg, #243049, #151e30); }
+.btn--paper i, .btn--ink i { font-family: var(--display); }
+/* a note for the falling notes while there is nothing to fall */
+body.is-empty .rollwrap::after {
+  content: "Notes fall here and land on the keys they belong to";
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  font-family: var(--display); font-style: italic; font-size: 15px; color: var(--fg-faint);
+}
 
 /* ============================================================ keys (SVG) == */
 .pk { cursor: pointer; transition: fill .09s linear; }
@@ -715,9 +757,69 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .typemap__note { margin-top: 14px; padding-top: 0; border-top: none; }
 
 /* ============================================================ settings ==== */
-.sheetdlg--wide { max-width: 640px; max-height: calc(100vh - 40px); overflow-y: auto; }
+/* SETTINGS IN SECTIONS. Eight groups in one 640px column made a dialog you
+   scrolled through to find anything (the device settings were three screens
+   down). Now a list of sections on the left and one section at a time on
+   the right; the dialog keeps a fixed height, so it doesn't jump. */
+.sheetdlg--wide {
+  max-width: 880px; height: min(700px, calc(100vh - 40px)); max-height: calc(100vh - 40px);
+  display: flex; flex-direction: column; padding: 20px 22px 18px; overflow: hidden;
+}
+.sheetdlg--wide:not([open]) { display: none; }
+.sheetdlg--wide .sheetdlg__head { margin-bottom: 14px; }
+.setlayout { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 188px 1fr; gap: 20px; }
+.setnav { display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--rule-soft); padding-right: 14px; }
+.setnav__tab {
+  text-align: left; font: 500 13px var(--ui); color: var(--fg-dim);
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-sm);
+  padding: 8px 11px; cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease);
+}
+.setnav__tab:hover { color: var(--fg); background: rgba(255,255,255,.03); }
+.setnav__tab[aria-selected="true"] {
+  color: var(--fg); background: linear-gradient(180deg, #223049, #1a253a);
+  border-color: var(--rule); box-shadow: inset 2px 0 0 var(--gold);
+}
+.setpanes { min-height: 0; overflow-y: auto; padding-right: 6px; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+.setpanes .setgroup[hidden] { display: none; }
 .setgroup { padding: 16px 0 4px; border-top: 1px solid var(--rule-soft); }
-.setgroup:first-of-type { border-top: none; padding-top: 4px; }
+.setgroup:first-of-type, .setgroup.is-first { border-top: none; padding-top: 2px; }
+@media (max-width: 760px) {
+  .sheetdlg--wide { padding: 16px 14px; height: calc(100vh - 24px); }
+  .setlayout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; gap: 12px; }
+  .setnav {
+    flex-direction: row; overflow-x: auto; border-right: none; padding: 0 0 8px;
+    border-bottom: 1px solid var(--rule-soft); scrollbar-width: none;
+  }
+  .setnav::-webkit-scrollbar { display: none; }
+  .setnav__tab { flex: none; white-space: nowrap; }
+  .setnav__tab[aria-selected="true"] { box-shadow: inset 0 -2px 0 var(--gold); }
+}
+
+.pieceinfo { margin: 2px 0 12px; font-size: 12.5px; line-height: 1.55; color: var(--fg-dim); }
+.pieceinfo b { color: var(--fg); font-weight: 600; }
+/* fingering styles: one card per variant, with what it costs on this piece */
+.unit { display: inline-flex; align-items: center; gap: 6px; }
+.unit__label { font: 500 11px var(--data); color: var(--fg-faint); }
+.num--wide { width: 64px; }
+#handReach { max-width: 290px; }
+.styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin: 6px 0 10px; }
+.styles__empty { margin: 4px 0; color: var(--fg-faint); font-family: var(--display); font-style: italic; font-size: 13px; }
+.style {
+  position: relative; display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+  padding: 11px 12px; border: 1px solid var(--rule-soft); border-radius: var(--r-md);
+  background: var(--ink-sunk); transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.style:hover { border-color: #33405c; }
+.style input { margin: 3px 0 0; accent-color: var(--gold); }
+.style.is-on { border-color: rgba(226,177,92,.55); background: linear-gradient(180deg, rgba(226,177,92,.08), rgba(226,177,92,.02)); }
+.style__body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.style__name { font-weight: 600; font-size: 13.5px; color: var(--fg); display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.style__badge {
+  font: 600 9.5px var(--ui); letter-spacing: .08em; text-transform: uppercase; font-style: normal;
+  color: var(--jade-hi); border: 1px solid rgba(89,194,160,.45); border-radius: var(--r-pill); padding: 1px 7px;
+}
+.style__desc { font-size: 12px; line-height: 1.45; color: var(--fg-dim); }
+.style__stats { font: 11.5px var(--data); color: var(--fg-faint); line-height: 1.5; }
 .setgroup__title {
   margin: 0 0 3px; font-family: var(--ui); font-size: 9.5px; font-weight: 600;
   letter-spacing: .14em; text-transform: uppercase; color: var(--fg-faint);
@@ -916,3 +1018,75 @@ body.is-wait .transport { display: none; }
 .rollwrap:hover .hud:not(.is-empty), .rollwrap .hud.is-alert:not(.is-empty) { opacity: 1; }
 .hud.is-empty { display: none; }
 .nowplaying { justify-content: center; }
+
+/* ============================================================ toasts ====== */
+/* WHAT JUST HAPPENED. The status line is kept for screen readers only, and
+   its text shows over the falling notes while the pointer is there — which
+   left the result of opening a file (what was repaired, which part you are
+   practising, or that it could only be opened as notes) invisible unless you
+   happened to hover. A toast shows it for a few seconds under the header, in
+   the corner the eye does not need while playing; practice feedback stays in
+   the heads-up display over the notes. */
+.toasts {
+  position: fixed; top: var(--toast-top, 132px); z-index: 60;
+  /* aligned with the right edge of the workspace, not the window */
+  right: max(clamp(12px, 3vw, 34px), calc((100vw - 1360px) / 2 + clamp(14px, 3.2vw, 34px)));
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+  pointer-events: none; max-width: min(460px, calc(100vw - 24px));
+}
+.toast {
+  pointer-events: auto; display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px 10px 14px; border-radius: 12px;
+  background: rgba(17, 24, 36, .94); border: 1px solid var(--rule);
+  box-shadow: 0 18px 40px -18px rgba(0,0,0,.95);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font-size: 13px; line-height: 1.5; color: var(--fg);
+  animation: toastin .22s var(--ease);
+}
+.toast::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--fg-faint); }
+.toast--ok::before { background: var(--ok); box-shadow: 0 0 8px rgba(89,194,160,.7); }
+.toast--warn { border-color: rgba(217,164,65,.45); }
+.toast--warn::before { background: var(--warn); }
+.toast--err { border-color: rgba(210,96,79,.6); }
+.toast--err::before { background: var(--err); }
+.toast__text { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.toast__text b { font-weight: 600; }
+.toast__close {
+  flex: none; border: none; background: transparent; color: var(--fg-faint); cursor: pointer;
+  font: 500 16px/1 var(--ui); padding: 2px 2px 0; margin-top: 1px;
+}
+.toast__close:hover { color: var(--fg); }
+.toast.is-leaving { opacity: 0; transform: translateY(-6px); transition: opacity .2s var(--ease), transform .2s var(--ease); }
+@keyframes toastin { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* ============================================================ phone ======= */
+/* The header took three rows on a phone (brand, then two rows of buttons):
+   190px of a 844px screen before any music. Two rows now: the piece, then
+   one row of actions, with the keyboard chip reduced to its status dot. */
+@media (max-width: 760px) {
+  .masthead { gap: 10px; padding-bottom: 10px; }
+  .brand__text { display: none; }
+  .brand__mark { width: 30px; height: 30px; }
+  .nowplaying { flex: 1 1 0; order: 0; }
+  .loaders { flex-basis: 100%; width: 100%; min-width: 0; flex-wrap: nowrap; gap: 6px; }
+  .loaders .select, .loaders #sampleList, .loaders #pieceList { flex: 1 1 0; min-width: 0; max-width: none; }
+  .loaders .btn--file { flex: none; padding: 9px 12px; }
+  /* the keyboard chip keeps its status dot and a short name */
+  .midichip { flex: none; padding: 9px 10px 9px 24px; font-size: 0; }
+  .midichip::after { content: "MIDI"; font-size: 12px; }
+  .midichip::before { left: 10px; }
+  .toasts { top: auto; bottom: 12px; right: 12px; left: 12px; max-width: none; align-items: stretch; }
+  .firstrun__inner h2 { font-size: 24px; }
+  .firstrun__inner p { font-size: 13px; }
+  .firstrun__hint { display: none; }
+  /* the start page defines the page's height on a phone, instead of being
+     clipped by a panel sized for a score */
+  body.is-empty .paper { min-height: 0; flex: none; }
+  body.is-empty .firstrun { position: relative; inset: auto; padding: 22px 14px 26px; }
+  .firstrun__inner { width: 100%; }
+  .firstrun__actions .btn { white-space: normal; flex: 1 1 100%; }
+  /* settings fields stack: label over control */
+  .setgroup .field { flex-wrap: wrap; row-gap: 5px; }
+  .setgroup .field__label { white-space: normal; }
+  #handReach { max-width: 100%; }
+}

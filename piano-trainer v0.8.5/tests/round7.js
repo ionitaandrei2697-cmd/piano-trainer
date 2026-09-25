@@ -1,6 +1,6 @@
 const {open}=require("./harness");
 (async()=>{
-  const {pg,logs,close}=await open("/home/claude/work/out");
+  const {pg,logs,close}=await open(require("path").join(__dirname,".."));
   await pg.setViewport({width:1440,height:900});
   let pass=0,fail=0;
   const chk=(n,ok,x)=>{ok?pass++:fail++;console.log((ok?"  PASS  ":"  FAIL  ")+n+(!ok&&x!==undefined?"  <- "+JSON.stringify(x):""));};
@@ -125,7 +125,7 @@ const {open}=require("./harness");
     return {groups, open, titles, railRows, railH, deviceBelow: !!document.querySelector(".app > details:not(#logPanel)")};
   });
   chk("toolbar keeps only Mode, Hand, Repeat (+ the one Metronome toggle and tools)", JSON.stringify(st.groups)===JSON.stringify(["Mode","Hand","Repeat"]), st.groups);
-  chk("Settings opens with Panels / Show / Coach / Device & sound", st.open && ["Panels","Show","Coach","Device & sound"].every(t=>st.titles.includes(t)), st.titles);
+  chk("Settings opens with Panels / Show / Coach / Sound & keyboard", st.open && ["Panels","Show","Coach","Sound & keyboard"].every(t=>st.titles.includes(t)), st.titles);
   chk("toolbar is a single row on a wide screen", st.railRows===1, st);
   chk("Device & sound no longer sits at the page bottom", !st.deviceBelow);
   console.log("   toolbar height "+st.railH+"px (was 86)");

@@ -1,4 +1,4 @@
-const dir="/home/claude/work/out/src/"; globalThis.PT={keys:require(dir+"keys.js")};
+const dir=(require("path").join(__dirname,"..","src")+"/"); globalThis.PT={keys:require(dir+"keys.js")};
 const F=require(dir+"fingering.js");
 const {BENCH,HELDOUT}=require("./fingerbench.js"); const {jumps,minMoves}=require("./positions.js"); const MEL=require("./melodies.js");
 const agree=(set,J)=>{let hit=0,n=0;for(const b of set){const g=F.fingerMonophonic(b.p,b.hand,"M",{jumpW:J});b.f.forEach((e,i)=>{if((Array.isArray(e)?e:[e]).includes(g[i]))hit++;});n+=b.p.length;}return (100*hit/n).toFixed(1)+"%";};

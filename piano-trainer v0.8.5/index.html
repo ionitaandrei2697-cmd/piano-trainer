@@ -99,7 +99,7 @@
       <div class="rail__group rail__group--tools">
         <div class="rail__controls">
           <button class="btn btn--sm is-hidden" id="btnDrill">Drill</button>
-          <button class="btn btn--sm" id="btnFingering" title="Then click a falling note and press 1–5" disabled>Fingering</button>
+          <button class="btn btn--sm" id="btnFingering" title="Edit fingering: click a falling note, then press 1–5. Styles for your hand are in Settings → Hand &amp; fingering." disabled>Fingering</button>
           <span class="rail__readout is-hidden" id="fingerNote">&mdash;</span>
           <!-- where a finger change applies: this one note, or every note of that pitch in that hand -->
           <div class="seg is-hidden" id="fingerScope" role="group" aria-label="Apply the finger to">
@@ -110,6 +110,7 @@
           </div>
           <span class="fingerpad is-hidden" id="fingerPad" role="group" aria-label="Finger number">
             <button class="btn btn--sm" data-f="1">1</button><button class="btn btn--sm" data-f="2">2</button><button class="btn btn--sm" data-f="3">3</button><button class="btn btn--sm" data-f="4">4</button><button class="btn btn--sm" data-f="5">5</button><button class="btn btn--sm btn--ghost" data-f="0" title="Back to the automatic suggestion (0)">Auto</button>
+            <button class="btn btn--sm btn--ghost" id="btnStyles" title="Your hand size and the fingering styles for this piece">Styles&hellip;</button>
           </span>
           <button class="btn btn--sm" id="btnSettings" title="Panels, overlays, coach and device settings" aria-haspopup="dialog">
             <span class="gear" aria-hidden="true"></span> Settings
@@ -120,20 +121,22 @@
 
     <!-- ============ stage ============ -->
     <main class="stage">
-      <div class="firstrun is-hidden" id="firstRun">
-        <div class="firstrun__inner">
-          <h2>Start with a piece</h2>
-          <p>Open a MusicXML or MIDI file (or drop one anywhere on this page), pick one from <b>Samples</b> &mdash; or start right here:</p>
-          <div class="firstrun__actions">
-            <button class="btn" id="btnQuickListen">Hear it &mdash; <i>Ode to Joy</i></button>
-            <button class="btn btn--file" id="btnQuickLearn">Learn it &mdash; right hand, the music waits for you</button>
-          </div>
-        </div>
-      </div>
-
       <!-- the page -->
       <div class="paper" id="sheetPanel">
         <div class="paper__scroll" id="sheetContainer"></div>
+        <!-- the empty state sits ON the page, where the score will be -->
+        <div class="firstrun is-hidden" id="firstRun">
+          <div class="firstrun__inner">
+            <p class="firstrun__kicker">Piano Trainer</p>
+            <h2>Start with a piece</h2>
+            <p>Open a MusicXML or MIDI file &mdash; or drop one anywhere on this page &mdash; pick one from <b>Samples</b>, or start right here:</p>
+            <div class="firstrun__actions">
+              <button class="btn btn--paper" id="btnQuickListen">Hear it &mdash; <i>Ode to Joy</i></button>
+              <button class="btn btn--ink" id="btnQuickLearn">Learn it &mdash; right hand, the music waits for you</button>
+            </div>
+            <p class="firstrun__hint">A MIDI keyboard, the on-screen keys, or your computer keyboard (A&nbsp;S&nbsp;D&nbsp;F&hellip;) all play.</p>
+          </div>
+        </div>
       </div>
 
       <div class="nosheet is-hidden" id="noSheet">
@@ -228,6 +231,8 @@
   </div>
 
   <div class="dropzone is-hidden" id="dropZone" aria-hidden="true"><span>Drop to open</span></div>
+  <!-- what just happened (a piece loaded, a setting changed, an error): shown for a moment, never in the way -->
+  <div class="toasts" id="toasts" aria-hidden="true"></div>
 
   <!-- ============ settings ============ -->
   <dialog class="sheetdlg sheetdlg--wide" id="settingsDialog" aria-label="Settings">
@@ -235,9 +240,21 @@
       <h2>Settings</h2>
       <button class="btn btn--sm btn--ghost" id="btnSettingsClose">Close</button>
     </div>
+    <div class="setlayout">
+    <nav class="setnav" id="setNav" role="tablist" aria-label="Settings sections">
+      <button class="setnav__tab" role="tab" data-tab="piece" aria-selected="true">This piece</button>
+      <button class="setnav__tab" role="tab" data-tab="hand" aria-selected="false">Hand &amp; fingering</button>
+      <button class="setnav__tab" role="tab" data-tab="view" aria-selected="false">View</button>
+      <button class="setnav__tab" role="tab" data-tab="coach" aria-selected="false">Coach</button>
+      <button class="setnav__tab" role="tab" data-tab="metro" aria-selected="false">Metronome</button>
+      <button class="setnav__tab" role="tab" data-tab="device" aria-selected="false">Sound &amp; keyboard</button>
+      <button class="setnav__tab" role="tab" data-tab="data" aria-selected="false">Your data</button>
+    </nav>
+    <div class="setpanes">
 
-    <section class="setgroup">
+    <section class="setgroup" data-tab="piece" role="tabpanel">
       <h3 class="setgroup__title">This piece</h3>
+      <p class="pieceinfo" id="pieceInfo">No piece is open.</p>
       <div class="setgroup__row">
         <button class="btn btn--sm" id="btnExportMidi" disabled>Export as MIDI</button>
         <button class="btn btn--sm btn--ghost" id="btnDeletePiece" title="Take the open piece off the Saved pieces list (with its best score and fingering edits)" disabled>Remove from saved pieces</button>
@@ -255,7 +272,33 @@
       </div>
     </section>
 
-    <section class="setgroup">
+    <section class="setgroup" id="handGroup" data-tab="hand" role="tabpanel">
+      <h3 class="setgroup__title">Your hand &amp; fingering</h3>
+      <p class="setgroup__hint">The suggested fingers are worked out for the hand you describe here.</p>
+      <div class="setgroup__row">
+        <label class="field"><span class="field__label">Widest stretch, thumb to little finger</span>
+          <select id="handReach" class="select select--inline" aria-label="Widest stretch between thumb and little finger">
+            <option value="11">Less than an octave</option>
+            <option value="12">An octave</option>
+            <option value="14">A ninth</option>
+            <option value="15">Between a ninth and a tenth (average)</option>
+            <option value="16">A tenth</option>
+            <option value="17.5">An eleventh or more</option>
+          </select></label>
+        <label class="field"><span class="field__label">or your hand span</span>
+          <span class="unit"><input type="number" id="handCm" class="num num--wide" min="14" max="28" step="0.5" placeholder="cm" aria-label="Hand span in centimetres, thumb tip to little-finger tip, fingers spread" /><span class="unit__label">cm</span></span></label>
+        <span class="rail__readout" id="handNote"></span>
+      </div>
+      <div class="styles" id="fingerStyles" role="radiogroup" aria-label="Fingering style for this piece"></div>
+      <p class="setgroup__note">Try the stretch on the keys: thumb on a C, how far up can the little finger reach and still
+        press a key cleanly? The hand span in centimetres (thumb tip to little-finger tip, spread flat on a table) is
+        turned into an interval by a rule of thumb (a white key is 2.35&nbsp;cm wide) &mdash; the interval you can
+        actually play is the better guide. <b>Shifts</b> are jumps of the whole hand, <b>passes</b> thumb-unders
+        and finger-overs, <b>stretches</b> spans past what is comfortable for your hand, and a wavy line on a falling
+        chord means it is wider than you can hold: roll it, or take the far note with the other hand.</p>
+    </section>
+
+    <section class="setgroup" data-tab="view" role="tabpanel">
       <h3 class="setgroup__title">Panels</h3>
       <p class="setgroup__hint">The three ways of following the music.</p>
       <div class="setgroup__row">
@@ -265,7 +308,7 @@
       </div>
     </section>
 
-    <section class="setgroup">
+    <section class="setgroup" data-tab="view" role="tabpanel">
       <h3 class="setgroup__title">Show</h3>
       <p class="setgroup__hint">Drawn on top of the panels.</p>
       <div class="setgroup__row">
@@ -284,7 +327,7 @@
       </div>
     </section>
 
-    <section class="setgroup">
+    <section class="setgroup" data-tab="coach" role="tabpanel">
       <h3 class="setgroup__title">Coach</h3>
       <p class="setgroup__hint">How strictly a note is judged, and what happens after a clean pass.</p>
       <div class="setgroup__row">
@@ -314,7 +357,7 @@
       </p>
     </section>
 
-    <section class="setgroup">
+    <section class="setgroup" data-tab="metro" role="tabpanel">
       <h3 class="setgroup__title">Metronome</h3>
       <p class="setgroup__hint">The Metronome button in the toolbar turns the click on and off; this is what it sounds like.</p>
       <div class="setgroup__row">
@@ -365,8 +408,8 @@
         triplet easy to place.</p>
     </section>
 
-    <section class="setgroup">
-      <h3 class="setgroup__title">Device &amp; sound</h3>
+    <section class="setgroup" data-tab="device" role="tabpanel">
+      <h3 class="setgroup__title">Sound &amp; keyboard</h3>
       <div class="setgroup__row">
         <label class="knob knob--inline"><span class="knob__label">Volume</span>
           <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Music volume" /></label>
@@ -428,7 +471,7 @@
       </div>
     </section>
 
-    <section class="setgroup">
+    <section class="setgroup" data-tab="data" role="tabpanel">
       <h3 class="setgroup__title">Your data</h3>
       <p class="setgroup__hint">Saved pieces, fingerings, best scores and the practice log live in this browser only.</p>
       <div class="setgroup__row">
@@ -441,6 +484,8 @@
         <b>Start Piano Trainer.cmd</b> count as two different places to the browser, each with its own
         memory. Save a backup in one and restore it in the other to bring everything across.</p>
     </section>
+    </div><!-- /.setpanes -->
+    </div><!-- /.setlayout -->
   </dialog>
 
   <!-- ============ shortcuts ============ -->
@@ -496,6 +541,7 @@
   <script src="src/keys.js"></script>
   <script src="src/timing.js"></script>
   <script src="src/mxl.js"></script>
+  <script src="src/score-import.js"></script>
   <script src="src/parser.js"></script>
   <script src="src/theory.js"></script>
   <script src="src/convert-midi-to-xml.js"></script>

@@ -5,7 +5,7 @@
  *  - textbook agreement does not fall below its measured level;
  *  - the search never hits its safety bound (so the result is exact);
  *  - a 3000-onset piece with chords is fingered in well under two seconds. */
-const dir="/home/claude/work/out/src/"; globalThis.PT={keys:require(dir+"keys.js")};
+const dir=(require("path").join(__dirname,"..","src")+"/"); globalThis.PT={keys:require(dir+"keys.js")};
 const F=require(dir+"fingering.js");
 const {jumps,minMoves}=require("./positions.js"); const MEL=require("./melodies.js"); const {BENCH,HELDOUT}=require("./fingerbench.js");
 let pass=0,fail=0; const chk=(n,ok,x)=>{ok?pass++:fail++;console.log((ok?"  PASS  ":"  FAIL  ")+n+(!ok&&x!==undefined?"  <- "+JSON.stringify(x):""));};
