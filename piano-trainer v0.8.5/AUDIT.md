@@ -318,3 +318,64 @@ Verified by `tests/round10.js` (7 checks; the previous commit fails 4 of them)
 and `tests/fingervariants.js` (19; bar 29 and the 4-3-2-1 run are in it). The
 average-hand results are unchanged: 96.1% / 100% method-book agreement, the
 exact minimum of hand moves on all 13 melodies.
+
+## Round 5 — fingering reported on *Für Elise*
+
+A player with an average hand marked four places in the opening (bars 1-8) where
+the suggested fingering was harder than necessary, and gave the easier one.
+Each was reproduced on the MIDI file before changing anything; the causes are
+general, so each fix is a rule, not a patch for the piece.
+
+| # | Sev | Finding | How it was reproduced |
+|---|-----|---------|-----------------------|
+| 41 | S3 | **E D# E D# E B D C A came out 5 4 5 4 5 1 3 2, then a jump for A** (the thumb on B4). The position model said a finger plays one key per position, so finger 4 on D#5 and then on D5 counted as a move; avoiding it put the thumb on B. | Fingers dumped for bars 1-3 and 6-7 (the same figure: 5 4 5 4 5 2 3, jump, 5 4). |
+| 42 | S3 | **C4 E4 A4 B4 as 1 2, a jump, 3 4** (bar 7) instead of 1 2 4 5. Every jump cost the same, so a jump in mid-figure was as cheap as one in the rest before it. | Bar 7: the jump on A4, 0.2 s after E4, legato; the rest before C4 unused. |
+| 43 | S3 | **E4 G#4 B4 C5 as 2 1 4 5** — the thumb passing onto G#4, cheaper (one pass) than re-placing the hand in the rest before E4 (a jump, two). | Bar 4 and its 7 repeats: 8 thumbs on G#4 in the piece. |
+| 44 | S4 | The load message named the tracks "Piano□, Piano□": the file's track names end in a NUL byte, shown as a box. | Track names read from the file: `"Piano\u0000"`. Fixed in `src/parser.js` (control characters dropped from MIDI names); `tests/probe.js` fails on the previous commit. |
+
+**Fixes** (`src/fingering.js`). (41) A finger may slide a semitone between a
+black key and the white key beside it, without a change of position, if it
+did not play the note just before; it costs a little comfort (0.8). Not
+between two white keys: that is a whole key width, and allowing it made the
+method-book set worse (Happy Birthday gained a move; small-hand stretches
+appeared). (42) A jump during a rest (a gap over 0.12 s) counts as one move,
+like a pass; between connected notes it still counts two. (43) is fixed by
+either (41) or (42) alone. Also: a thumb pass that lands the thumb on a black
+key now counts two, like a jump — no effect on these bars, but it makes F major
+the textbook 1234-1234.
+
+**Which rule does what** (each switched off in turn, bars 1-8): without the
+slide, bars 1-3 return to 5 1 3 2 + jump and bar 6 gets a jump on B; without
+the rest rule, bar 3 becomes 2, jump, 1 (pass), 3 4; without the black-key pass
+rule, nothing changes here, and the tuning set falls back to 96.1%.
+
+**Results.** Bars 1-8 are now 5 4 5 4 5 2 4 3 1 | 1 2 4 5 | 1 2 4 5 |
+1 5 4 5 4 5 2 4 3 1 | 1 2 4 5 | 1 5 4 3, the hand moving only in the rests and
+on the octave E4-E5; the same a fourth, a fifth and an octave lower. Whole
+piece, right hand: jumps between connected notes 69 → 45, thumb on a black key
+in a line 9 → 2, the same finger on two different keys in a row between
+connected notes 8 → 0. Method-book agreement 96.1% → **99.3%** (tuning set:
+F major is now 1-2-3-4-1-2-3-4, the black-key pass rule) and 100% held-out; average hand in
+`fingervariants.js` 97.4% → 99.6%, small hand unchanged at 95.7%; the exact
+minimum of hand moves still holds on all 13 melodies. `tests/fingervariants.js`
+gained 5 checks (bars 1-9 with the file's timing, three transpositions); the
+previous commit fails all 5.
+
+### Honest caveats
+
+- **Not fixed: the fast chromatic run in bar 104** still puts the thumb on
+  A#6 and F#6 (2 1 4 3 2 1 on B6 A#6 A6 G#6 G6 F#6). A thumb-on-white
+  fingering needs more crossings, and every crossing counts one move however
+  small. Four general fixes were tried and measured: counting a thumb step
+  onto a black key as a move (bar 104 fixed; two jumps between fast connected
+  notes appeared instead); letting the thumb shift a step under the hand
+  (fixed; broke *Frère Jacques* — 2 3 4 2 for C D E C — and bars 18 and 48);
+  cheaper crossings between neighbouring keys (fixed; broke bar 8, one of the
+  reported bars); a surcharge on fast jumps (double thumb-unders in the bar
+  103 arpeggio). None shipped.
+- The four reports are one player's hand. The rules they led to are checked on
+  the method-book set, the 13 melodies and three transpositions, not on other
+  players.
+- 0.8 for a slide and "a jump in a rest counts one" are **modelling choices**
+  set from these examples and the benchmark, not measurements.
+

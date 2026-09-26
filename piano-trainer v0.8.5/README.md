@@ -533,15 +533,39 @@ equal:
 - a **jump** — the hand lifts and lands somewhere else: 5 then 1 on a repeated
   key, the same finger on the next key, a leap to a new position.
 
-The search minimises **2 × jumps + passes exactly** — its state is the hand
-position itself — and only then, among the fingerings with that minimum, picks
-the most comfortable one by the ergonomic rules below. So a repeated note never
-changes finger at ordinary speed (that would be a jump), and a chord shares its
-position with the melody around it. The weight 2 was chosen by a sweep: at 1 a
-two-octave scale turns into 12345-12345-12345 (two jumps rather than the
-textbook's three passes); counting jumps alone turned *Twinkle* into nine thumb
-passes to avoid one jump; 2 is the only value that keeps every textbook
-fingering with the fewest moves.
+The search minimises the **weighted number of moves exactly** — its state is
+the hand position itself — and only then, among the fingerings with that
+minimum, picks the most comfortable one by the ergonomic rules below. A thumb
+pass counts 1 and a jump between connected notes counts 2. So a repeated note
+never changes finger at ordinary speed (that would be a jump), and a chord
+shares its position with the melody around it. The weight 2 was chosen by a
+sweep: at 1 a two-octave scale turns into 12345-12345-12345 (two jumps rather
+than the textbook's three passes); counting jumps alone turned *Twinkle* into
+nine thumb passes to avoid one jump; 2 is the only value that keeps every
+textbook fingering with the fewest moves.
+
+Two exceptions, from fingerings a player reported on *Für Elise*:
+
+- **A jump in a rest counts 1, not 2.** When the hand is off the keys anyway
+  (a gap of more than 0.12 s), re-placing it breaks nothing. Counting it like a
+  jump in mid-figure made the engine keep C4 E4 with 1 2 and then re-place the
+  hand for A4 B4 (3 4), rather than play 1 2 4 5 from the rest.
+- **A thumb pass that lands the thumb on a black key counts 2, like a jump.**
+  Method books avoid it about as strictly as they avoid breaking the line. This
+  is what makes F major in the right hand the textbook 1-2-3-4-1-2-3-4 instead
+  of a thumb on B♭ (method-book agreement 96.1% → 99.3%). In *Für Elise* it
+  changes nothing: E4 G#4 B4 C5 (2 1 4 5, thumb onto G#4) is already fixed by
+  the rest rule above, or by the slide below, each on its own.
+
+**A finger may slide a semitone without the hand moving**, between a black key
+and the white key beside it: in *Für Elise* finger 4 plays D#5 and, a beat
+later, D5, so E D# E D# E B D C A is 5 4 5 4 5 2 4 3 1 — the edition fingering.
+The strict model ("a finger always plays the same key") had to call that a
+change of position, and to avoid it put the thumb on B and jumped for the A
+(5 1 3 2 + jump). A slide costs a little comfort, is allowed only if that finger
+did not play the note just before, and is not allowed between two white keys
+(E-F, B-C are a whole key width apart — that is moving the hand; allowing it
+made the method-book fingerings worse).
 
 **Where a jump goes, when one is unavoidable.** A jump breaks the line, which is
 only audible where the line is connected: inside stepwise motion or on a
@@ -573,7 +597,8 @@ apply (a stride bass lands the same finger again, and that is fine).
 | | hand moves on 13 melodies (exact minimum 25) | textbook, tuning set | textbook, held-out set |
 |---|---|---|---|
 | before these changes | 35 (optimal on 10) — 2 repeated notes changed finger | 94.1% | 100% |
-| now | **25 (optimal on all 13)** — none | **96.1%** | **100%** |
+| with hand positions (round 3) | 25 (optimal on all 13) — none | 96.1% | 100% |
+| now (slides, moves weighted by where they fall) | **25 (optimal on all 13)** — none | **99.3%** | **100%** |
 | the version before that | — | 94.8% | 64.6% |
 
 The minimum is computed independently of the search (an exact programme over
@@ -581,11 +606,21 @@ all ways to cut a melody into positions), so "optimal" is checked, not assumed.
 The search never needed more than 36 states per note; a 3,000-note piece with
 chords takes about half a second.
 
-**Still not perfect, and it can't be.** F major in the right hand still puts the
-thumb on B♭ (the textbook is 1-2-3-4-1-2-3-4 — one *Every B♭4* edit fixes the
-piece), and the left-hand C arpeggio comes out 5-3-2-1, which many teachers
-accept for smaller hands. The definitions are modelling choices: "comfortable"
-is Parncutt's table for an average adult hand, scaled to yours (see *Your hand*
+**Still not perfect, and it can't be.** The left-hand C arpeggio comes out
+5-3-2-1 (the textbook says 5-4-2-1; many teachers accept 5-3-2-1 for smaller
+hands). A fast chromatic run can put the thumb on a black key: in *Für Elise*,
+bar 104, B6 A#6 A6 G#6 G6 F#6 comes out 2 1 4 3 2 1 (thumb on A#6 and F#6),
+where a pianist keeps the thumb on the white keys. The reason is structural: a
+chromatic fingering with the thumb only on white keys needs more thumb
+crossings (a group ends wherever two white keys meet), and every crossing
+counts as one move however small it is — here a semitone. Four ways of fixing
+it were tried (the thumb stepping onto a black key counted as a move; the thumb
+shifting a step under the hand for free; cheaper crossings between neighbouring
+keys; a surcharge on fast jumps). Each fixed bar 104, and each broke something
+else: Für Elise bars 8, 18 or 48, *Frère Jacques*, or the arpeggio in bar 103.
+So none shipped. Pinning one finger there doesn't help (the thumb just moves to
+the next black key); the run needs its fingers written in. The definitions are
+modelling choices: "comfortable" is Parncutt's table for an average adult hand, scaled to yours (see *Your hand*
 below), and a thumb pass reaches up to a fifth. And
 fingering is personal: two professional pianists choose the same finger for
 only 60–80% of notes (Nakamura, Saito & Yoshii 2020). What the engine now
@@ -608,7 +643,7 @@ position itself. The keys are the same width for every hand, so every hand
 plays C-D-E-F-G (or C-D-E♭-F-G) comfortably; what a larger hand does is reach
 further past it. (Scaling the whole table instead — what the engine used to do
 — turned a small hand's five-finger position into a "stretch": its method-book
-agreement fell to 61.6%. It is 95.7% now, and the average hand is unchanged.)
+agreement fell to 61.6%. It is 95.7% now.)
 
 A chord wider than your hand can stretch gets an **arpeggio sign** — a wavy line
 up its left edge on the falling notes: roll it, or take the far note with the
@@ -764,6 +799,55 @@ and the keyboard shortcuts reach everything.
 ---
 
 ## What changed in this revision
+
+### Reported on *Für Elise*: fingering for an average hand
+
+A player with an average hand marked four places in the opening where the
+suggested fingering was harder than it needs to be: fingers 1, 4 and 5 crowded
+together; 5 3 1 easier than 5 4 1; C E A B as 1 2 4 5 without moving the hand,
+not 1 2 + move + 3 4; E B D C as 5 2 4 3 and then 1 on A, not 5 1 3 2. The
+opening, bars 1-8, before and after:
+
+| bars | notes | was | now |
+|---|---|---|---|
+| 1-3 | E D# E D# E B D C A | 5 4 5 4 5 **1 3 2**, then a jump for A (thumb on B) | **5 4 5 4 5 2 4 3 1**, no move |
+| 4-5 | E4 G#4 B4 C5 | 2 **1** 4 5 (the thumb passes onto G#4) | **1 2 4 5**, the hand placed in the rest before |
+| 6-7 | E D# E D# E B D C A | 5 4 5 4 5 2 3, a jump, **5 4** | **5 4 5 4 5 2 4 3 1**, no move |
+| 7-8 | C4 E4 A4 B4 | 1 2, a jump, 3 4 | **1 2 4 5**, no move |
+
+Two causes, each fixed as a general rule, not for this piece (see *How the
+automatic fingering works*). Switching each off in turn shows which example
+needs which:
+
+1. **A finger couldn't slide a semitone.** The model said a finger plays one
+   key per hand position, so 4 on D#5 and then on D5 counted as moving the hand.
+   Now a finger may move between a black key and the white key next to it.
+   Without it, bars 1-3 go back to 5 1 3 2 + a jump, and bar 6 gets a jump on B.
+2. **Every jump cost the same, wherever it fell.** A jump in a rest, when the
+   hand is off the keys, now counts as one move; a jump between connected notes
+   still counts two. Without it (slides alone), bar 3 becomes 2, a jump, 1 via a
+   thumb pass, 3 4 — slides make other routes cheap, and only the rest rule
+   keeps the move in the rest.
+
+E4 G#4 B4 C5 is fixed by either rule on its own. A third rule came out of the
+same analysis — a thumb pass onto a black key counts like a jump — and changes
+nothing in these bars; it is what fixed F major in the method-book set.
+
+The same fingering comes out a fourth, a fifth and an octave lower, so the
+rules are not tied to these keys. On the whole piece (average hand, right
+hand), jumps between connected notes fell from 69 to 45, the thumb on a black
+key in a melodic line from 9 notes to 2, and a finger playing two different
+keys in a row between connected notes from 8 to 0. Method-book agreement went
+from 96.1% to **99.3%** on the tuning set (all of it from the third rule: F
+major is now textbook), still 100% on the held-out set, and the exact minimum
+of hand moves still holds on all 13 melodies. What is still wrong: the fast
+chromatic run in bar 104 (see *Still not perfect*). Tested by
+`tests/fingervariants.js` (bars 1-9 with the file's timing; the previous
+commit fails 5 of its 24 checks).
+
+Also found on that file: its track names end in a NUL byte ("Piano\0"), which
+the load message showed as "Piano□". Names from MIDI files now lose control
+characters (`tests/probe.js`).
 
 ### Reported on a real piece: one key, one finger; a page that stayed white
 

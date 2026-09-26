@@ -386,6 +386,43 @@
   // then with 1". It never adds a move; it only decides that when a move is
   // unavoidable nearby (a pinned finger can force one), it doesn't land there.
   const REPEAT_JUMP = 2;
+  /*
+   * WHAT A MOVE COSTS DEPENDS ON WHERE IT HAPPENS. Counting every jump as two
+   * thumb passes, wherever it fell, made two kinds of fingering look better
+   * than they are (both reported on Für Elise, for an average hand):
+   *  - a jump inside a legato figure (C4 E4 | A4 B4 with the hand re-placed
+   *    in mid-arpeggio) cost the same as the jump a pianist makes during the
+   *    rest a bar later, when the right hand is off the keys anyway; and
+   *  - any thumb pass counted as half a jump — even one that lands the thumb
+   *    on a black key (E4 G#4 with 2-1, then B4 C5 on 4-5, cramped against it)
+   *    rather than re-placing the hand in the rest before E4.
+   * So a jump taken in a rest (the hand is off the keys: a gap of more than
+   * 0.12 s, see handOnsets) now counts as one move, like a pass; a jump
+   * between connected notes still counts JUMP_W; and a pass that puts the
+   * thumb on a black key counts as much as a jump, since method books avoid
+   * it exactly as they avoid breaking the line. Set from four Für Elise
+   * passages a player reported (tests/fingervariants.js), then checked
+   * against every textbook and melody set. (Switched off one at a time: the
+   * rest rule and SLIDE_COST below each fix E4 G#4 on their own; the rule
+   * for passes onto black keys is what makes F major 1234-1234, 96.1% ->
+   * 99.3% on the tuning set, and changes nothing in Für Elise.)
+   */
+  const REST_JUMP_W = 1;
+  // THE FINGER SLIDES A SEMITONE. A position is "each finger on its own key",
+  // but a finger also plays the black key beside its white one (or the white
+  // key beside its black one) without the hand moving: in Für Elise 4 plays
+  // D#5 and, a beat later, D5 (E D# E D# E B D C A = 5 4 5 4 5 2 4 3 1, the
+  // edition fingering). The strict model had to call that a change of
+  // position, and to avoid it put the thumb on B and jumped for the A. A
+  // slide keeps the position and costs a little comfort. Only between a black
+  // and a white key: a black key sits between two white ones, so the finger
+  // shifts about half a key sideways; two white keys a semitone apart (E-F,
+  // B-C) are a whole key width apart, which is moving the hand — allowing
+  // those too made the method-book fingerings worse (a rule of thumb, checked
+  // on the benchmark, not a measurement). And only when the finger did not
+  // play the note just before: it can't slide off a key it is still playing
+  // (that is the chromatic scale's problem, which passes solve).
+  const SLIDE_COST = 0.8;
   function legatoBreak(interval) {                  // semitones, 0 = repeated note
     const d = Math.abs(interval);
     if (d === 0) return REPEAT_JUMP;
@@ -482,6 +519,17 @@
     const W = real.map(whiteIndex); W.sign = sg;
     const relief = opts.relief || [], ioi = opts.ioi || [];
     const JW = opts.jumpW == null ? JUMP_W : opts.jumpW;
+    // the right hand is off the keys before onset i (relief < 1 marks a rest)
+    const restBefore = (i) => relief[i] != null && relief[i] < 1;
+    const jumpW = (i) => (restBefore(i) ? Math.min(JW, REST_JUMP_W) : JW);
+    const passW = (i, fb) => (fb === 1 && K[i] ? JW : 1);      // thumb passing under onto a black key
+    const blackRH = (k) => isBlackKey(sg * k);
+    const validMap = (m) => {                                  // fingers in key order, every pair within the frame
+      for (let a = 0; a < m.length; a++) for (let b = a + 1; b < m.length; b++) {
+        if (!spanOK(m[a][0], m[a][1], m[b][0], m[b][1], scale, frame)) return false;
+      }
+      return true;
+    };
     const r = (i) => (relief[i] == null ? 1 : relief[i]);
     const cp = (i) => (ioi[i] == null ? null : coupling(ioi[i]));
     const cp3 = (i) => (ioi[i] == null || ioi[i - 1] == null ? null : Math.max(coupling(ioi[i]), coupling(ioi[i - 1])));
@@ -555,6 +603,18 @@
         if (!pinClash) for (const m of extendMap(s.m, free, O[i].pins, scale, frame)) {
           push({ m, fa2: s.fa1, fa1: repFinger(m, i), c: s.c, v: s.v + stepCost(m, i, s.fa2, s.fa1), prev: s, moved: false });
         }
+        // stay, with one finger sliding a semitone to a neighbouring key
+        // (one of the two black) — see SLIDE_COST
+        if (O[i].keys.length === 1 && free.length === 1) {
+          const k = free[0];
+          for (const [k2, f] of s.m) {
+            if (Math.abs(k2 - k) !== 1 || f === s.fa1 || !(blackRH(k) || blackRH(k2))) continue;
+            if (O[i].pins.has(k) && O[i].pins.get(k) !== f) continue;
+            const m = s.m.map((x) => (x[0] === k2 ? [k, f] : x)).sort((a, b) => a[0] - b[0]);
+            if (!validMap(m)) continue;
+            push({ m, fa2: s.fa1, fa1: f, c: s.c, v: s.v + stepCost(m, i, s.fa2, s.fa1) + SLIDE_COST, prev: s, moved: false, slide: true });
+          }
+        }
         // a fast repeated note may change finger on the key (3-2-1) — the hand
         // stays where it is, so this is neither a jump nor a pass
         if (inRun[i]) for (const m of freshI) {
@@ -575,7 +635,7 @@
           // after a JUMP the next three-note rule must not look back across it
           // (the hand was re-placed; comparing a finger before the jump with one
           // after it describes a stretch that never happens) — fa2 = 0 turns it off
-          push({ m, fa2: pass ? s.fa1 : 0, fa1: fb, c: s.c + (pass ? 1 : JW), v: s.v + stepCost(m, i, s.fa2, s.fa1, !pass),
+          push({ m, fa2: pass ? s.fa1 : 0, fa1: fb, c: s.c + (pass ? passW(i, fb) : jumpW(i)), v: s.v + stepCost(m, i, s.fa2, s.fa1, !pass),
                  prev: s, moved: true, jump: !pass });
         }
       }

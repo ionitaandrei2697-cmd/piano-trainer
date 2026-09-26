@@ -101,7 +101,8 @@ node tests/scoreimport.js    # 31 checks: UTF-16/Latin-1/BOM files, .mxl variant
                              # short parts, crashing content, score-timewise, voice + piano parts,
                              # grace notes, and the notes-only fallback when the engine refuses a score
 node tests/fingervariants.js # (Node) small hands keep method-book fingerings, the four styles,
-                             # fast repeated notes (3-2-1), chords too wide for the hand, suggestions
+                             # fast repeated notes (3-2-1), chords too wide for the hand, suggestions,
+                             # Für Elise bars 1-9 as reported (a finger sliding D#-D, moves only in rests)
 node tests/round10.js        # reported on a real piece: the page after Convert to sheet music, a score opened
                              # with the Score panel off, a finger number on every falling note, the move legend
 ```

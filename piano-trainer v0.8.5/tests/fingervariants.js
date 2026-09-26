@@ -82,5 +82,32 @@ chk("reaches an octave -> relaxed; average -> balanced; an eleventh -> compact",
   [12, 15, 17.5].map((r) => F.suggestedStrategy({ reach: r })));
 chk("hand reach reported in semitones (average: 15 practical, 13 comfortable)", (() => { const h = F.handReach({ reach: 15 }); return Math.abs(h.practical - 15) < 1e-9 && Math.abs(h.comfortable - 13) < 1e-9; })());
 
+console.log("\nFür Elise, bars 1-9 (reported by a player with an average hand)");
+// Right hand as the MIDI file plays it: sixteenths at 72 BPM (0.208 s), a
+// sixteenth rest after each eighth, so the hand is off the keys before C4, E4, D4.
+// The four reports: 1 4 5 cramped together; 5 3 1 is easier than 5 4 1;
+// C4 E4 A4 B4 without moving the hand (1 2 4 5, not 1 2 + move 3 4);
+// E B D C A as 5 2 4 3 then 1, no move (not 5 1 3 2).
+const ELISE = "E5 D#5 E5 D#5 E5 B4 D5 C5 A4:2 r C4 E4 A4 B4:2 r E4 G#4 B4 C5:2 r E4 E5 D#5 E5 D#5 E5 B4 D5 C5 A4:2 r C4 E4 A4 B4:2 r D4 C5 B4 A4:4";
+const elise = (shift, size) => {
+  const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, SIX = 0.2083;
+  const notes = []; let t = 0;
+  for (const tok of ELISE.split(" ")) {
+    const [nm, len] = tok.split(":"); const l = +(len || 1);
+    if (nm !== "r") { const m = /^([A-G])(#?)(\d)$/.exec(nm); notes.push({ id: notes.length, midi: 12 * (+m[3] + 1) + PC[m[1]] + (m[2] ? 1 : 0) + shift, startSec: t * SIX, durSec: l * SIX - 0.012, staff: 0 }); }
+    t += l;
+  }
+  const s = { notes }; F.annotate(s, size || "M");
+  return { f: s.notes.map((n) => n.finger).join(""), moves: s.notes.map((n, i) => (n.handMove ? i : -1)).filter((i) => i >= 0), notes: s.notes };
+};
+const E0 = elise(0);
+console.log("        " + E0.f.replace(/^(.{9})(.{4})(.{4})(.{10})(.{4})(.{4})$/, "$1 | $2 | $3 | $4 | $5 | $6"));
+chk("the edition fingering: 545452431 | 1245 | 1245 | 1545452431 | 1245 | 1543", E0.f === "545452431" + "1245" + "1245" + "1545452431" + "1245" + "1543", E0.f);
+chk("  ...4 plays D#5 and, a beat later, D5: one finger slides a semitone, the hand stays", E0.f.slice(1, 7) === "454524");
+chk("  ...the hand moves only in the rests and on the octave leap E4-E5", JSON.stringify(E0.moves) === JSON.stringify([9, 13, 18, 27, 31]), E0.moves);
+chk("  ...no thumb on G#4", E0.notes.every((n) => !(n.midi === 68 && n.finger === 1)));
+const shifted = [-5, -7, -12].map((sh) => elise(sh).f);
+chk("the same fingering a fourth, a fifth and an octave lower (the rule is not tied to these keys)", shifted.every((f) => f === E0.f), shifted);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

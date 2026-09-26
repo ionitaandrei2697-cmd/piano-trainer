@@ -326,13 +326,16 @@
    * file with no piano track practises all its pitched tracks. opts.parts
    * ({trackIndex: part}) overrides — the Parts list in Settings sets it.
    */
+  // Names in MIDI files are raw bytes; some end in NUL padding ("Piano\0"),
+  // which the page showed as "Piano□".
+  const cleanName = (s) => String(s || "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
   function midiTracks(midi) {
     return midi.tracks.map((t, i) => ({ t, i })).filter((x) => x.t.notes && x.t.notes.length).map(({ t, i }) => {
       const inst = t.instrument || {};
       const percussion = !!inst.percussion || t.channel === 9;
       let lo = Infinity, hi = -Infinity;
       for (const n of t.notes) { if (n.midi < lo) lo = n.midi; if (n.midi > hi) hi = n.midi; }
-      return { index: i, name: (t.name || "").trim(), instrument: percussion ? "drums" : (inst.name || ""),
+      return { index: i, name: cleanName(t.name), instrument: percussion ? "drums" : (inst.name || ""),
                family: percussion ? "drums" : (inst.family || ""), percussion, count: t.notes.length, lo, hi };
     });
   }
@@ -463,8 +466,8 @@
     for (const n of notes) if (!n.backing) { if (n.midi < minMidi) minMidi = n.midi; if (n.midi > maxMidi) maxMidi = n.midi; }
 
     const name =
-      (midi.header && midi.header.name) ||
-      (midi.tracks.find((t) => t.name) || {}).name ||
+      cleanName(midi.header && midi.header.name) ||
+      cleanName((midi.tracks.find((t) => cleanName(t.name)) || {}).name) ||
       "MIDI file";
 
     const sigs = ((midi.header && midi.header.timeSignatures) || [])

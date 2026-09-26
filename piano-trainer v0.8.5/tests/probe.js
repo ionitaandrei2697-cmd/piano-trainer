@@ -77,4 +77,10 @@ const bytes=x2m.songToMIDI({notes:[{midi:60,startSec:0,durSec:1,staff:0}],defaul
 ok("SMF magic MThd", String.fromCharCode(...bytes.slice(0,4))==="MThd");
 ok("SMF format 1", bytes[8]===0&&bytes[9]===1);
 ok("ntracks 2 (no LH)", bytes[11]===2, bytes[11]);
+// --- MIDI names padded with NUL bytes (a Für Elise file: "Piano\0" shown as "Piano□")
+globalThis.Midi=require(require("path").join(__dirname,"..","lib","Midi.js")).Midi;
+const parser=require(path+"parser.js"), mk=require("./mkmidi.js");
+const nulFile=mk.file([mk.track([mk.name(0,"Piano\0"),...mk.note(0,60,0,480),...mk.note(0,64,480,480)])],480);
+const parsed=parser.parseMIDI(new Uint8Array(nulFile).buffer);
+ok("MIDI track and piece names lose control characters", parsed.tracks[0].name==="Piano"&&parsed.title==="Piano", {tracks:parsed.tracks.map(t=>t.name),title:parsed.title});
 console.log(fails? ("\n"+fails+" FAILURES") : "\nall probes passed");
