@@ -433,3 +433,47 @@ of hand moves are unchanged.
   (the key-centre speller has no rule for a chromatic neighbour that resolves
   up a semitone). The sounding notes and the fingering are unaffected.
 
+## Round 7 — an old conversion; is the fingering really the hand's?
+
+Reported with a second screenshot (bars 107-117 of the converted score): *"the
+left hand still comes over the right one"*, and: *"are you sure the fingering
+is adapted to the hand? Für Elise seems to keep the same fingering."*
+
+| # | Sev | Finding | How it was reproduced |
+|---|-----|---------|-----------------------|
+| 47 | S3 | **A conversion made before round 6 kept the left hand in the right hand's line.** A converted score is saved as a piece of its own and reopened by itself; round 6 repaired MIDI files only, never a score's staves. | Simulated: repair switched off, convert, reload. The reopened score had 20 left-hand notes at D#5/E5. |
+| 48 | S3 | **A hand one semitone smaller than average got the reported awkward pattern back.** Scaled span limits were fractions (2-4: 4.75 semitones for a hand that reaches a ninth), so a fourth between 2 and 4 was a "stretch"; Für Elise changed in 114 notes, bar 7 back to C E A B = 1 2, move, 3, bar 3 to a thumb crossing under 2. | Fingering of the piece for the six hand sizes in Settings, diffed against the average hand. |
+| 49 | S3 | **A hand that reaches an octave moved in mid-arpeggio rather than stretch a semitone.** A position could never pass the hand's comfortable span, so C E A B (2-4 one semitone past it) became a move or a thumb crossing — what the average hand is spared. | Same diff: 255 notes differ, 208 jumps against the average hand's 165. |
+| 50 | S3 | **The style suggested for small hands made things harder.** *Relaxed* (never stretch): on the method-book set 78.4% agreement for a hand that reaches an octave, against 95.7% for Balanced. | The method-book set run for every size in Settings and every style. |
+
+**Fixes.** (47) The converter writes a mark into its scores (software + grid);
+a score with the mark, or saved as a conversion, gets the MIDI repair when it
+opens, and if notes move it is redrawn from the repaired notes and saved, once
+(`midiToXML.conversionOf`, `loadMusicXMLText`). (48) Scaled limits are rounded
+to whole semitones, as the table is. (49) A hand smaller than average may span
+what the average hand spans comfortably, each finger pair past its own
+comfortable span counting half a thumb pass (`SMALL_STRETCH_W`). (50) Balanced
+is suggested for every hand below a tenth.
+
+**Results, Für Elise, Balanced:** a hand that reaches a ninth plays exactly the
+average hand's fingering (was 114 notes different); an octave, 71 notes
+different (was 255) with 157 jumps (was 208), 30 thumb passes (was 61), 38
+slight stretches (was 5); the average hand unchanged in every style; a tenth
+and an eleventh at most 24 notes different, with no more moves or stretches.
+(The practical span is not rounded: it is the reach the player gives, and
+rounding 17.5 up would have let the largest hand pass it.)
+Method-book agreement 99.6% for every size (was 95.7% for an octave or less,
+78.4% with the suggested style). `tests/fingervariants.js` 27 checks,
+`tests/round11.js` 10 (reopening an old conversion twice).
+
+### Honest caveats
+
+- For a hand that reaches an octave, bar 3 still passes the thumb under 2
+  (C E with 2 1): it saves the move before bar 4. A slight stretch there would
+  cost the same, and the comfort rules prefer the crossing.
+- 0.5 for a stretch, and rounding to whole semitones, are rules of thumb; the
+  hand-size model itself (the published spans, scaled beyond a five-finger
+  position) is not a measurement of any one player's hand.
+- "Easier" is measured by moves, stretches and agreement with method books,
+  not by players of different hand sizes trying the results.
+

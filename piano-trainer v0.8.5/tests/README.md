@@ -105,6 +105,7 @@ node tests/fingervariants.js # (Node) small hands keep method-book fingerings, t
                              # Für Elise bars 1-9 as reported (a finger sliding D#-D, moves only in rests)
 node tests/hands.js          # (Node) a line the MIDI tracks split goes to one hand (Für Elise); accompaniments
                              # passed between the hands stay (Bach, Gounod, Schumann, Joplin, a held voice, a fast trill)
+node tests/round11.js        # an old conversion reopened: repaired and redrawn once; a fresh one marked; real scores untouched
 node tests/round10.js        # reported on a real piece: the page after Convert to sheet music, a score opened
                              # with the Score panel off, a finger number on every falling note, the move legend
 ```

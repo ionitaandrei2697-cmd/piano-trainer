@@ -430,6 +430,29 @@
       showNoSheet("unengraved");
     }
     song.importFixes = fixes;
+    // A score this app converted from a MIDI file has the file's split into
+    // hands, not an editor's: it gets the MIDI file's repair (a line split
+    // between the hands goes to one, see parser.untangleHands). One converted
+    // before that repair existed is redrawn from the repaired notes, once, and
+    // saved over the old one — else it would keep showing the notes on the
+    // other staff.
+    const conv = PT.midiToXML.conversionOf(text, persistAs && persistAs.id);
+    if (conv) {
+      const r = PT.parser.untangleHands(song.notes);
+      if (r.moved && !(choice && choice.redrawn)) {
+        const src = Object.assign({}, song, { notes: song.notes.filter((n) => !n.backing).map((n) => Object.assign({}, n)) });
+        const xml2 = PT.midiToXML.midiToMusicXML(src, { grid: conv.grid });
+        await loadMusicXMLText(xml2, fallbackTitle, persistAs, Object.assign({}, choice, { redrawn: r.moved, fixes }));
+        // a saved piece reopened is not re-saved (its name and date stay): keep
+        // just the redrawn score, so this happens once
+        if (persistAs && persistAs.id && persistAs.store === false) {
+          const rec = await store.get("pieces", persistAs.id);
+          if (rec && rec.format === "musicxml") { rec.content = xml2; await store.put("pieces", rec); }
+        }
+        return;
+      }
+      if (choice && choice.redrawn) song.untangled = { moved: choice.redrawn, redrawn: true };
+    }
     finishLoad(fallbackTitle, "musicxml", text, persistAs);
   }
   /** Re-read the open score with new part choices (Settings -> This piece). */
@@ -565,6 +588,7 @@
       if (back.length) bits.push("backing: " + back.join(", ") + " (Settings \u2192 This piece)");
     }
     if (sg.importFixes && sg.importFixes.length) bits.push("repaired on import: " + sg.importFixes.join("; "));
+    if (sg.untangled && sg.untangled.redrawn) bits.push(sg.untangled.moved + " note" + (sg.untangled.moved === 1 ? "" : "s") + " in the other hand's register given to that hand, and the score redrawn");
     return bits.join(" \u00b7 ");
   }
 

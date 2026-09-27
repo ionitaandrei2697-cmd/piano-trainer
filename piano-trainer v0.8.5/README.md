@@ -654,7 +654,31 @@ position itself. The keys are the same width for every hand, so every hand
 plays C-D-E-F-G (or C-D-E♭-F-G) comfortably; what a larger hand does is reach
 further past it. (Scaling the whole table instead — what the engine used to do
 — turned a small hand's five-finger position into a "stretch": its method-book
-agreement fell to 61.6%. It is 95.7% now.)
+agreement fell to 61.6%.) Two refinements, both measured on *Für Elise*:
+
+- **Limits are whole semitones.** A scaled limit is rounded to the nearest
+  interval, as the table itself is. Unrounded, a hand that reaches a ninth
+  could span 4.75 semitones between fingers 2 and 4, so E4-A4 (a fourth) was
+  a "stretch", and the engine changed 114 notes of the piece to avoid it —
+  putting back a move in the middle of C E A B, the pattern a player had
+  reported as awkward. Rounded, that hand plays it like the average hand
+  (4 notes differ).
+- **A smaller hand may stretch a little rather than move.** For a hand
+  smaller than average, a position may span what the average hand spans
+  comfortably, and each finger pair spread past this hand's own comfortable
+  span counts half a thumb pass: one slight stretch beats a move, a move beats
+  two stretches — and a smaller hand never stretches where the average one
+  moves. For a hand that reaches an octave, C E A B in bar 7 is 1 2 4 5 again
+  instead of 1 2, move, 3 4; over the whole piece 157 jumps and 30 thumb
+  passes for 38 slight stretches (208, 61 and 5 before both changes). The
+  weight is a rule of thumb.
+
+With both, a hand that reaches a ninth plays *Für Elise* exactly like the
+average hand; method-book agreement for a hand that reaches an octave (or
+less) is 99.6%, against 95.7% before — and 78.4% with the style the app used
+to suggest for it. The average hand's fingering is unchanged in every style;
+for a hand that reaches a tenth or more a few notes change (24 at most in
+*Für Elise*), with no more moves or stretches than before.
 
 A chord wider than your hand can stretch gets an **arpeggio sign** — a wavy line
 up its left edge on the falling notes: roll it, or take the far note with the
@@ -675,9 +699,14 @@ The same exact search runs with four definitions of "one hand position", and
 | **Relaxed hand** | never past a relaxed span | small hands, beginners: no stretching |
 | **Legato** | as Balanced, but a jump costs three passes, not two | joined lines: pass rather than lift |
 
-One is suggested for your hand (relaxed up to about an octave, stay-in-position
-from a tenth — a rule of thumb); the one you pick is remembered per piece, and
-your own finger edits stay pinned in every style.
+One is suggested for your hand (stay-in-position from a tenth, balanced below —
+a rule of thumb); the one you pick is remembered per piece, and your own finger
+edits stay pinned in every style. Small hands used to be offered *relaxed*.
+Measured for a hand that reaches an octave, it avoids Balanced's slight
+stretches (3 instead of 38 in *Für Elise*) at the cost of 66 more jumps and 31
+more thumb passes, and it matches the method books less often (95.7% against
+99.6%) — so it stays a choice for a hand that should not stretch at all, not
+the suggestion.
 
 **Fast repeated notes change finger** — 4-3-2-1 or 3-2-1, towards the thumb,
 starting again on 3 or 4 — in a **run**: four or more strokes on one key, each
@@ -810,6 +839,37 @@ and the keyboard shortcuts reach everything.
 ---
 
 ## What changed in this revision
+
+### Old conversions repaired; fingering that really follows the hand
+
+Reported: *"the left hand still comes over the right one"*, with a screenshot of
+a converted score, after the repair above had shipped. The score was a
+conversion made **before** that repair: a converted score is saved as a piece
+of its own and reopened by itself, and a score's staves were never repaired.
+Now a score the app converted from MIDI (known by its saved id, and by a mark
+the converter now writes into the file) gets the same repair when it opens,
+and if notes move it is redrawn from them and saved again — so an old
+conversion fixes itself once. Scores from anywhere else are left as written.
+`tests/round11.js` (10 checks, including reopening an old conversion twice).
+
+Asked in the same message: *is the fingering really adapted to the hand?*
+Measured on *Für Elise* for the six hand sizes in Settings: the average hand
+(the reporter's) gets the edition fingering, and so, after the changes below,
+does a hand that reaches a ninth; a hand that reaches an octave or less gets
+real changes (more moves, a few slight stretches); a hand that reaches a tenth
+or more changes little in *Balanced* and far fewer moves in *Stay in position*.
+Three things were wrong for smaller hands and are fixed (see *Your hand*):
+limits a fraction of a semitone short of a whole interval turned plain figures
+into moves (a hand that reaches a ninth changed 114 notes, back to the
+"1 2, move, 3" pattern — now it plays the average hand's fingering); a hand
+that reaches an octave moved in mid-arpeggio rather than stretch a semitone;
+and the style suggested for small hands, *relaxed*, bought its lack of
+stretches with many more moves. Method-book agreement for a hand that reaches
+an octave: 95.7% → 99.6% (78.4% with the old suggestion); the average hand's
+fingering is unchanged. Still not
+ideal for that hand: in bar 3 the thumb passes under 2 (C E with 2 1), which
+saves the move before bar 4.
+`tests/fingervariants.js` (27 checks).
 
 ### *Für Elise*: the left hand no longer cuts into the right hand's line
 

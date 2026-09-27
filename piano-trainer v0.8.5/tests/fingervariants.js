@@ -45,7 +45,8 @@ console.log("\nStyles (13 melodies, average hand)");
 const T = {}; for (const st of Object.keys(F.STRATEGIES)) { T[st] = totals({ reach: 15 }, st); console.log("        " + st.padEnd(9) + JSON.stringify(T[st])); }
 chk("legato joins the line: fewer jumps than balanced, paid for in thumb passes", T.legato.jumps < T.balanced.jumps && T.legato.passes > T.balanced.passes, T);
 const Ts = {}; for (const st of Object.keys(F.STRATEGIES)) Ts[st] = totals({ reach: 12 }, st);
-chk("small hand: 'stay in position' stretches, 'relaxed' never does", Ts.compact.stretches > 0 && Ts.relaxed.stretches === 0 && Ts.compact.jumps <= Ts.balanced.jumps, Ts);
+// (the 13 melodies fit a hand that reaches an octave without stretching; the
+// Für Elise opening further down does not — the styles are compared there)
 chk("small hand: 'relaxed' moves the hand at least as often as 'balanced'", Ts.relaxed.jumps + Ts.relaxed.passes >= Ts.balanced.jumps + Ts.balanced.passes, Ts);
 const v = F.variants(songOf(MEL[0].p, MEL[0].hand), { reach: 15 });
 chk("variants() reports all four styles and marks one as suggested", v.length === 4 && v.filter((x) => x.suggested).length === 1, v);
@@ -77,9 +78,11 @@ chk("a tenth is too wide for the average hand, fine for one that reaches an elev
 chk("a triad is never marked", !wide([60, 64, 67], "right", { reach: 12 }));
 
 console.log("\nSuggestions");
-chk("reaches an octave -> relaxed; average -> balanced; an eleventh -> compact",
-  F.suggestedStrategy({ reach: 12 }) === "relaxed" && F.suggestedStrategy({ reach: 15 }) === "balanced" && F.suggestedStrategy({ reach: 17.5 }) === "compact",
+chk("reaches an octave -> balanced (relaxed only added moves); average -> balanced; an eleventh -> compact",
+  F.suggestedStrategy({ reach: 12 }) === "balanced" && F.suggestedStrategy({ reach: 15 }) === "balanced" && F.suggestedStrategy({ reach: 17.5 }) === "compact",
   [12, 15, 17.5].map((r) => F.suggestedStrategy({ reach: r })));
+chk("  ...and for a hand that reaches an octave, relaxed is no easier on the melodies than balanced",
+  Ts.relaxed.jumps + Ts.relaxed.passes >= Ts.balanced.jumps + Ts.balanced.passes && Ts.relaxed.stretches === Ts.balanced.stretches, Ts);
 chk("hand reach reported in semitones (average: 15 practical, 13 comfortable)", (() => { const h = F.handReach({ reach: 15 }); return Math.abs(h.practical - 15) < 1e-9 && Math.abs(h.comfortable - 13) < 1e-9; })());
 
 console.log("\nFür Elise, bars 1-9 (reported by a player with an average hand)");
@@ -108,6 +111,22 @@ chk("  ...the hand moves only in the rests and on the octave leap E4-E5", JSON.s
 chk("  ...no thumb on G#4", E0.notes.every((n) => !(n.midi === 68 && n.finger === 1)));
 const shifted = [-5, -7, -12].map((sh) => elise(sh).f);
 chk("the same fingering a fourth, a fifth and an octave lower (the rule is not tied to these keys)", shifted.every((f) => f === E0.f), shifted);
+
+console.log("\nFür Elise, bars 1-9, for other hands");
+const eliseStyle = (size, strategy) => {
+  const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, SIX = 0.2083, notes = []; let t = 0;
+  for (const tok of ELISE.split(" ")) { const [nm, len] = tok.split(":"); const l = +(len || 1);
+    if (nm !== "r") { const m = /^([A-G])(#?)(\d)$/.exec(nm); notes.push({ id: notes.length, midi: 12 * (+m[3] + 1) + PC[m[1]] + (m[2] ? 1 : 0), startSec: t * SIX, durSec: l * SIX - 0.012, staff: 0 }); }
+    t += l; }
+  const s = { notes }; F.annotate(s, size, { strategy }); return { f: s.notes.map((n) => n.finger).join(""), st: s.fingerStats };
+};
+const ninth = eliseStyle({ reach: 14 }, "balanced").f;
+console.log("        a ninth:  " + ninth);
+chk("a hand that reaches a ninth plays it like the average hand (it was 1 2, move, 3 in bar 7)", ninth === E0.f, ninth);
+const oct = eliseStyle({ reach: 12 }, "balanced"), octC = eliseStyle({ reach: 12 }, "compact"), octR = eliseStyle({ reach: 12 }, "relaxed");
+console.log("        an octave: balanced " + oct.f + " · stay in position " + octC.f + " · relaxed " + octR.f);
+chk("a hand that reaches an octave stretches a little in bar 7 rather than move mid-arpeggio (C E A B = 1 2 4 5)", oct.f.slice(26, 31) === "11245", oct.f.slice(26, 31));
+chk("  ...'stay in position' is the edition fingering with stretches; 'relaxed' never stretches", octC.f === E0.f && octC.st.stretches > 0 && octR.st.stretches === 0, { compact: octC.st, relaxed: octR.st });
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -38,6 +38,7 @@
   "use strict";
 
   const theory = (typeof require !== "undefined") ? require("./theory.js") : root.PT.theory;
+  const SOFTWARE = "Piano Trainer (converted from MIDI)";
 
   // Note-type names by duration in quarter notes (for <type>).
   // value = quarters; we also detect a single dot.
@@ -177,7 +178,7 @@
     return emitXML({
       title: song.title || "Converted from MIDI",
       key, beatsPerMeasure, beatUnit, divisionsPerQuarter,
-      measureCount, perStaffMeasures, measureDiv, bpm,
+      measureCount, perStaffMeasures, measureDiv, bpm, grid,
     });
   }
 
@@ -302,6 +303,10 @@
     L.push('<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">');
     L.push('<score-partwise version="3.1">');
     L.push(`  <work><work-title>${esc(title)}</work-title></work>`);
+    // says the staves are this app's split of a MIDI file into hands (so the
+    // app may repair them when it opens the score again), and the grid used
+    L.push(`  <identification><encoding><software>${SOFTWARE}</software></encoding>` +
+      `<miscellaneous><miscellaneous-field name="piano-trainer-grid">${ctx.grid || 16}</miscellaneous-field></miscellaneous></identification>`);
     L.push('  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>');
     L.push('  <part id="P1">');
 
@@ -397,7 +402,24 @@
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  const api = { midiToMusicXML, durationToType, decomposeDuration, _assignHands: assignHands };
+  /**
+   * Was this score made by midiToMusicXML (this app's conversion of a MIDI
+   * file)? Then its staves are the file's tracks, not an editor's choice.
+   * Scores saved before the mark existed are known by their piece id.
+   * Returns { grid } or null.
+   */
+  function conversionOf(xml, pieceId) {
+    const mine = typeof xml === "string" && xml.indexOf("<software>" + SOFTWARE + "</software>") >= 0;
+    if (!mine && !/^converted-/.test(pieceId || "")) return null;
+    const g = /name="piano-trainer-grid">(\d+)</.exec(xml || "");
+    if (g) return { grid: +g[1] };
+    // older conversions: divisions = max(4, grid / 2)
+    const d = /<divisions>(\d+)<\/divisions>/.exec(xml || "");
+    const div = d ? +d[1] : 8;
+    return { grid: div <= 4 ? 8 : Math.min(32, div * 2) };
+  }
+
+  const api = { midiToMusicXML, conversionOf, SOFTWARE, durationToType, decomposeDuration, _assignHands: assignHands };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else { root.PT = root.PT || {}; root.PT.midiToXML = api; }
 })(typeof window !== "undefined" ? window : globalThis);
