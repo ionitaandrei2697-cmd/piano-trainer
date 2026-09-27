@@ -378,6 +378,113 @@
   }
 
   /*
+   * HANDS IN EACH OTHER'S WAY. A MIDI file's two piano tracks are taken as
+   * the hands, but some files split one line between them. In a Für Elise
+   * file the left-hand track has D#5 E5 pairs in the middle of the right
+   * hand's E D# E D#: the left hand would reach up among the right hand's
+   * keys and back, twice a bar, while the right hand has nothing else to do.
+   * A pianist plays that line with one hand.
+   *
+   * For each run of onsets that only one hand plays, between two onsets that
+   * only the other hand plays (within UNTANGLE_GAP on both sides), the notes
+   * at either end of the run that sit in the other hand's register (for the
+   * left hand: no lower than a whole step below the lower of those two
+   * onsets; mirrored for the right) go to the other hand if they INTERRUPT it:
+   *  - the other hand plays the same key or the one beside it among its two
+   *    onsets just before them and among its two just after;
+   *  - their own hand's line doesn't continue from them: its last note before
+   *    them and its next note after (not counting the next interruption) are
+   *    more than a fourth away;
+   *  - and the other hand can take them: single notes, no two notes of its
+   *    line closer than UNTANGLE_IOI, each note ending by its next one (a
+   *    line, not a held voice), and nothing it holds outlasting them.
+   * An accompaniment passed from hand to hand fails at least one of these:
+   * run on 89 two-staff piano scores (31,611 notes, six tempos, where the
+   * staves are the hands) the rule moves nothing; on the Für Elise file it
+   * moves the 24 notes of that passage (four times six), at any tempo from
+   * half to two and a half times the file's. The thresholds are rules of
+   * thumb. Scores (MusicXML) are never touched: there the staves are the
+   * editor's choice.
+   */
+  const UNTANGLE_GAP = 1.0;   // s: the other hand plays this close to the run, on both sides
+  const UNTANGLE_REACH = 1.5; // s: how far back and ahead a hand's neighbouring notes are looked for
+  const UNTANGLE_IOI = 0.1;   // s: about 10 notes a second from one hand
+  function untangleHands(notes) {
+    const prac = notes.filter((n) => !n.backing && !n.unreachable);
+    const byKey = new Map(), groups = [];
+    for (const n of prac) {
+      const k = Math.round(n.startSec * 1000);
+      let g = byKey.get(k);
+      if (!g) { g = { t: n.startSec, notes: [] }; byKey.set(k, g); groups.push(g); }
+      g.notes.push(n);
+    }
+    groups.sort((a, b) => a.t - b.t);
+    const handOf = (g) => { let r = false, l = false; for (const n of g.notes) { if (n.staff >= 1) l = true; else r = true; } return r && l ? -1 : l ? 1 : 0; };
+    const hands = [prac.filter((n) => n.staff === 0), prac.filter((n) => n.staff >= 1)];
+    let moved = 0;
+    for (const from of [1, 0]) {
+      const to = 1 - from;
+      const toStaff = to === 0 ? 0 : 1;
+      // can `to` take note n (one hand: speed checked by the caller)?
+      // (a note it is still sounding may overlap the new one — a legato
+      // release, as the Für Elise E5 eighth under D#5 — but not outlast it:
+      // a hand holding a note through the whole of it is busy)
+      const fits = (n) => {
+        const held = hands[to].filter((x) => x.startSec < n.startSec - 1e-6 && x.startSec + x.durSec > n.startSec + 0.02);
+        if (held.some((x) => x.midi === n.midi || x.startSec + x.durSec > n.startSec + n.durSec + 0.02)) return false;
+        const ps = held.map((x) => x.midi).concat([n.midi]);
+        return held.length < 5 && Math.max(...ps) - Math.min(...ps) <= 12;
+      };
+      const take = (g) => { for (const n of g.notes) { n.staff = toStaff; hands[from].splice(hands[from].indexOf(n), 1); hands[to].push(n); moved++; } };
+      for (let i = 1; i < groups.length - 1; i++) {
+        if (handOf(groups[i]) !== from) continue;
+        let j = i;
+        while (j + 1 < groups.length && handOf(groups[j + 1]) === from) j++;
+        const a = groups[i - 1], b = groups[j + 1];
+        if (!b || handOf(a) !== to || handOf(b) !== to || groups[i].t - a.t > UNTANGLE_GAP || b.t - groups[j].t > UNTANGLE_GAP) { i = j; continue; }
+        const edge = from === 1 ? Math.min(...a.notes.map((x) => x.midi), ...b.notes.map((x) => x.midi)) - 2
+                                : Math.max(...a.notes.map((x) => x.midi), ...b.notes.map((x) => x.midi)) + 2;
+        const inside = (g) => g.notes.length === 1 && (from === 1 ? g.notes[0].midi >= edge : g.notes[0].midi <= edge);
+        // Move groups x..y only if they interrupt the other hand: it plays the
+        // same key or the one beside it both just before and just after them,
+        // while their own hand's other notes around them are more than a
+        // fourth away. An accompaniment passed from hand to hand fails one or
+        // the other (Bach's C major prelude figure, a Joplin rag's hands
+        // leap-frogging up the keyboard, an arpeggio continued by the other hand).
+        const tryMove = (x, y) => {
+          const seg = groups.slice(x, y + 1), t0 = seg[0].t, t1 = seg[seg.length - 1].t;
+          const ps = seg.map((g) => g.notes[0].midi);
+          const dist = (n) => Math.min(...ps.map((q) => Math.abs(q - n.midi)));
+          const inSeg = (n) => seg.some((g) => g.notes[0] === n);
+          // the notes of `list` at its last `k` onsets before t0 / first `k` after t1
+          const side = (list, dir, k, keep) => {
+            const c = list.filter((n) => !inSeg(n) && (keep ? keep(n) : true) && (dir < 0 ? n.startSec < t0 - 1e-6 && n.startSec >= t0 - UNTANGLE_REACH : n.startSec > t1 + 1e-6 && n.startSec <= t1 + UNTANGLE_REACH));
+            const ts = [...new Set(c.map((n) => Math.round(n.startSec * 1000)))].sort((u, v) => (dir < 0 ? v - u : u - v)).slice(0, k);
+            return c.filter((n) => ts.includes(Math.round(n.startSec * 1000)));
+          };
+          if (!side(hands[to], -1, 2).some((n) => dist(n) <= 1) || !side(hands[to], 1, 2).some((n) => dist(n) <= 1)) return;
+          // their own hand's line: its last note before them, and its next note
+          // after them that is not itself in the other hand's register (the
+          // next interruption, judged on its own)
+          const notTo = (n) => (from === 1 ? n.midi < edge : n.midi > edge);
+          if (side(hands[from], -1, 1).some((n) => dist(n) <= 5) || side(hands[from], 1, 1, notTo).some((n) => dist(n) <= 5)) return;
+          const line = [groups[x - 1], ...seg, groups[y + 1]].filter((g) => g && handOf(g) === to || seg.includes(g));
+          for (let k = 1; k < line.length; k++) if (line[k].t - line[k - 1].t < UNTANGLE_IOI - 1e-9) return;
+          // a note of the line, not a held voice: it ends by the next note, and the hand isn't holding one through it
+          for (let k = x; k <= y; k++) { const n = groups[k].notes[0]; if (!fits(n) || n.startSec + n.durSec > groups[k + 1].t + 0.05) return; }
+          for (let k = x; k <= y; k++) take(groups[k]);
+        };
+        let p = i - 1; while (p < j && inside(groups[p + 1])) p++;          // prefix i..p touches a
+        let s = j + 1; while (s > p + 1 && inside(groups[s - 1])) s--;      // suffix s..j touches b
+        if (p >= i) tryMove(i, p);
+        if (s <= j) tryMove(s, j);
+        i = j;
+      }
+    }
+    return { moved };
+  }
+
+  /*
    * REACH. When a file is split into hands by track (or by pitch), a hand can
    * be handed notes it cannot hold at once: in "The World" the left-hand
    * track has D2 + A4 together (31 semitones) while the right hand plays
@@ -503,7 +610,7 @@
     };
   }
 
-  const api = { extractFromOSMD, defaultScoreParts, scorePartsInfo, parseMIDI, midiTracks, defaultParts, midiBars, repairReach, freqToMidi, midiToFreq, assignIds, splitHandsByPitch };
+  const api = { extractFromOSMD, defaultScoreParts, scorePartsInfo, parseMIDI, midiTracks, defaultParts, midiBars, repairReach, untangleHands, freqToMidi, midiToFreq, assignIds, splitHandsByPitch };
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;

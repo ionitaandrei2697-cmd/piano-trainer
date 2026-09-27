@@ -379,3 +379,57 @@ previous commit fails all 5.
 - 0.8 for a slide and "a jump in a rest counts one" are **modelling choices**
   set from these examples and the benchmark, not measurements.
 
+## Round 6 — the left hand cutting into the right hand's line
+
+Reported with a screenshot of *Für Elise*, the E-D# passage before the theme
+returns (bars 107-113 of the converted score): *"I don't understand the left
+hand coming in here."*
+
+| # | Sev | Finding | How it was reproduced |
+|---|-----|---------|-----------------------|
+| 45 | S3 | **The left hand plays D#5 E5 in the middle of the right hand's E D# E D#.** The MIDI file puts those notes in the left-hand track; a file's two piano tracks were taken as the hands, as they are. So the left hand reached up among the right hand's keys and back twice a bar while the right hand was free, and the converted score put the notes above the bass staff on ledger lines. | Notes of the file by track: 5 left-hand notes at D#5/E5 in bars 22-24, the same in its three repeats (bars 36-38, 73-75, 117-119). |
+| 46 | S4 | **Right hand: E5 with 5, then after a rest the same E5 with 1** (once the passage is one hand's). A move across a rest that is geometrically a thumb crossing (B4 with 2, then E5 with the thumb, a fourth higher) could only be scored as a crossing, which the comfort rules charge heavily; the engine kept 5 and re-placed the hand at the next rest. | Fingering dump of bars 22-23 after the fix for 45. |
+
+**Fixes.** (45) `parser.untangleHands`, run on every MIDI file after the
+tracks become hands: at the ends of a run of one hand's onsets between two of
+the other hand's, notes in the other hand's register go to it if they
+interrupt it — it plays the same key or the one beside it among its two onsets
+just before and its two just after — if their own hand's line is more than a
+fourth away (its last note before, its next note after), the other hand can
+take them (single notes, no two notes closer than 0.1 s, each ending by the
+next, nothing held through them) and the other hand plays within 1 s on both
+sides. The load message says how many notes moved. Scores are never touched.
+(46) Across a rest, a move that is a crossing can also be a lift; the search
+takes the cheaper.
+
+**Checked against false positives first.** In real two-staff piano scores the
+staves are the hands, so every note the rule would move there is a mistake.
+89 piano parts from the corpora of round 3 (31,611 notes; a few pieces are in
+two corpora and count twice), each at six tempos (0.5x to 3x): the first
+version moved 58 notes at 1x (Bach's C major prelude, where
+the left hand holds its second note; Gounod's Ave Maria, the same figure
+without ties; arpeggios passed from hand to hand in Schumann and Clara
+Schumann; the leap-frogging hands of the Maple Leaf Rag). Each guard above was
+added for one of those; the final rule moves **none** of them, and on the
+Für Elise file moves the 24 notes of the passage at every tempo from 0.5x to
+2.5x. `tests/hands.js` (13 checks) has the passage and the six kinds of
+accompaniment, each blocked by the guard it needs.
+
+**Results.** Für Elise bars 22-25: left hand E2 E3 E4 (and E4 once more), the
+right hand E5 E5 E5 E6 then D#5 E5 … with 5-4. Everywhere else in the piece
+the fingering is the same except one chord (bar 100, left hand, E3+G#3 after a
+rest: 5-3 → 2-1). Method-book agreement (99.3% / 100%) and the exact minimum
+of hand moves are unchanged.
+
+### Honest caveats
+
+- The corpus check measures false positives only in engraved scores. What the
+  rule misses in other MIDI files (true interruptions it leaves alone) is not
+  measured: Für Elise is the only real case I have.
+- 1 s, 0.1 s, "the same key or the one beside it" and "more than a fourth" are
+  **rules of thumb**, set so the corpus stays untouched; they are not
+  measurements of how pianists divide a line.
+- Not fixed, noted on the way: the converted score spells that D#5 as E♭5
+  (the key-centre speller has no rule for a chromatic neighbour that resolves
+  up a semitone). The sounding notes and the fingering are unaffected.
+

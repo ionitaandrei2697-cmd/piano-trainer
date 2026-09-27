@@ -199,6 +199,17 @@ Wait mode a first note you couldn't press, so nothing ever started. Now:
   comfortable span (13 semitones for a medium hand), the note nearest the other
   hand moves across if that hand can take it; anything still out of reach is
   played for you.
+- **A line split between the tracks is given to one hand.** Some files put a
+  few notes of one hand's line in the other hand's track: in a *Für Elise* file
+  the left-hand track has D#5 E5 pairs in the middle of the right hand's
+  E D# E D#, so the left hand would reach up among the right hand's keys and
+  back. Such notes go to the hand that is already there — only when they
+  interrupt it (it plays the same key or the one beside it just before and
+  just after them, and their own hand's line is more than a fourth away), it
+  can take them (not too fast, nothing held through them) and they are single
+  notes of a line, not a held voice. Accompaniments passed from hand to hand
+  on purpose stay as written: on 89 two-staff piano scores (31,611 notes, six
+  tempos) the rule moves nothing. The load message says how many notes moved.
 - **Bars follow the file's time signatures, all of them.** Barlines, bar
   numbers, the metronome, the count-in and Repeat used only the first signature
   for the whole piece; a file that goes 5/8, 4/4, 9/8 … 23/16 now gets each bar
@@ -799,6 +810,27 @@ and the keyboard shortcuts reach everything.
 ---
 
 ## What changed in this revision
+
+### *Für Elise*: the left hand no longer cuts into the right hand's line
+
+Reported with a screenshot of the E-D# passage before the theme returns: *"I
+don't understand the left hand coming in here."* The MIDI file puts D#5 E5
+pairs of that line in the left-hand track, and the app takes the tracks as the
+hands — so the left hand had to reach up among the right hand's keys, twice a
+bar, while the right hand had nothing else to play (and in the converted score
+those notes sat above the bass staff on ledger lines). Now a line the tracks
+split is given to the hand already playing it (see *MIDI files on a smaller
+keyboard*): in this file 24 notes, the six of that passage in each of its four
+appearances; the left hand keeps its E2 E3 E4. The right hand's line then got
+E5 with 5 and, after the next rest, the same E5 with 1: a move across a rest
+could only count as a thumb crossing (B4 with 2, then E5 with the thumb, a
+fourth under), which the comfort rules charge heavily, so the engine kept 5
+and moved later. Across a rest the same move can now also be a lift; the
+three E5s get one finger, the E-D# line 5-4. Elsewhere in the piece one
+chord changed: the left hand's E3+G#3 in bar 100, after a rest, is 2-1 instead
+of 5-3. The method-book and hand-move results are the same.
+`tests/hands.js` (13 checks: this passage at five tempos, six accompaniments
+that must stay as written, a round trip through a MIDI file).
 
 ### Reported on *Für Elise*: fingering for an average hand
 

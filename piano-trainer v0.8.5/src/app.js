@@ -541,6 +541,7 @@
       if (back.length) bits.push("backing: " + back.join(", "));
       if (drums) bits.push("drums left out");
     }
+    if (sg.untangled && sg.untangled.moved) bits.push(sg.untangled.moved + " note" + (sg.untangled.moved === 1 ? "" : "s") + " in the other hand's register given to that hand");
     if (sg.reach && sg.reach.moved) bits.push(sg.reach.moved + " note" + (sg.reach.moved === 1 ? "" : "s") + " too far for one hand given to the other");
     if (sg.reach && sg.reach.left) bits.push(sg.reach.left + " out of reach, played for you");
     if (sg.meterChanges) bits.push("bars follow its " + sg.meterChanges + " time-signature change" + (sg.meterChanges === 1 ? "" : "s"));
@@ -622,6 +623,8 @@
     midiOpts = { parts: (choice && choice.parts) || null, fit: !(choice && choice.fit === false) };
     song = PT.parser.parseMIDI(buf, { parts: midiOpts.parts });
     song.fitResult = midiOpts.fit ? fitToKeyboard(song) : null;
+    // a line the file splits between the hands goes to the hand already there
+    song.untangled = PT.parser.untangleHands(song.notes);
     // a hand can't hold a chord wider than its comfortable 1-5 span (13
     // semitones for a medium hand): hand the outer note to the other hand
     song.reach = PT.parser.repairReach(song.notes, Math.round(PT.fingering.handReach(handSpec()).comfortable));

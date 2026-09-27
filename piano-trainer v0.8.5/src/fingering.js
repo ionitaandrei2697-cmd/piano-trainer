@@ -637,6 +637,11 @@
           // after it describes a stretch that never happens) — fa2 = 0 turns it off
           push({ m, fa2: pass ? s.fa1 : 0, fa1: fb, c: s.c + (pass ? passW(i, fb) : jumpW(i)), v: s.v + stepCost(m, i, s.fa2, s.fa1, !pass),
                  prev: s, moved: true, jump: !pass });
+          // across a rest the hand is off the keys, so the same move can also be
+          // a lift rather than a crossing (Für Elise, bar 22: B4 with 2, a rest,
+          // then E5 — the thumb re-placed, not passed under 2 by a fourth; else
+          // E5 got 5 and, after the next rest, 1)
+          if (pass && restBefore(i)) push({ m, fa2: 0, fa1: fb, c: s.c + jumpW(i), v: s.v + stepCost(m, i, s.fa2, s.fa1, true), prev: s, moved: true, jump: true });
         }
       }
       if (next.size > BEAM) {                               // bounded, best first
